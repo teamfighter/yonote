@@ -157,27 +157,32 @@ def export_document_content(base: str, token: str, doc_id: str) -> str:
 
     data = http_json("POST", f"{base}/documents.export", token, {"id": doc_id})
 
+    if isinstance(data, (bytes, bytearray)):
+        try:
+            data = json.loads(data.decode("utf-8"))
+        except Exception:
+            return ensure_text(data)
+
     if isinstance(data, dict):
-        if "data" in data:
+        if "data" in data and not isinstance(data["data"], dict):
             return ensure_text(data["data"])
         fo = data.get("fileOperation") or {}
         op_id = fo.get("id")
         if op_id:
             for _ in range(60):
-                info = http_json(
-                    "POST",
-                    f"{base}/fileOperations.info",
-                    token,
-                    {"id": op_id},
-                )
+                info = http_json("POST", f"{base}/fileOperations.info", token, {"id": op_id})
+                if isinstance(info, (bytes, bytearray)):
+                    try:
+                        info = json.loads(info.decode("utf-8"))
+                    except Exception:
+                        info = {}
                 fo_data = info.get("data") if isinstance(info, dict) else {}
                 state = fo_data.get("state")
                 if state == "complete":
                     raw = http_json(
-                        "POST",
-                        f"{base}/fileOperations.redirect",
+                        "GET",
+                        f"{base}/fileOperations.redirect?id={op_id}",
                         token,
-                        {"id": op_id},
                     )
                     return ensure_text(raw)
                 if state == "error":

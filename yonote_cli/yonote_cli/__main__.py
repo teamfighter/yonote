@@ -109,9 +109,9 @@ def main(argv=None):
         help="Export format (API returns Markdown by default)",
     )
     p_docs_export_batch.add_argument(
-        "--use-titles",
+        "--use-ids",
         action="store_true",
-        help="Name files by document titles (extra API call per id)",
+        help="Name files by document IDs instead of titles",
     )
     p_docs_export_batch.set_defaults(func=cmd_docs_export_batch)
 
