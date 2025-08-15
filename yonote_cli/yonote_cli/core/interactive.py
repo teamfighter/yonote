@@ -9,6 +9,7 @@ from .cache import list_collections, list_documents_in_collection
 
 try:
     from InquirerPy import inquirer
+    from InquirerPy.prompts.list import ListPrompt
     HAVE_INQUIRER = True
 except Exception:  # pragma: no cover - optional dependency
     HAVE_INQUIRER = False
@@ -120,11 +121,24 @@ def interactive_browse_for_export(
         for d in docs:
             children.setdefault(d.get("parentDocumentId"), []).append(d)
 
+        def toggle_descendants(doc_id: str) -> None:
+            stack = [doc_id]
+            ids: set[str] = set()
+            while stack:
+                cur = stack.pop()
+                ids.add(cur)
+                for ch in children.get(cur, []):
+                    stack.append(ch.get("id"))
+            if doc_id in selected_docs:
+                selected_docs.difference_update(ids)
+            else:
+                selected_docs.update(ids)
+
         def browse(parent_id: Optional[str], path: str, current: Optional[dict]) -> Optional[str]:
-            while True:
-                choices: List[dict] = []
-                if parent_id is not None:
-                    choices.append({"name": "..", "value": "__up"})
+            search: Dict[str, Optional[str]] = {"query": None}
+
+            def build_choices() -> List[dict]:
+                choices: List[dict] = [{"name": "..", "value": "__up"}]
                 if current is None:
                     mark = "[x]" if coll_id in selected_cols else "[ ]"
                     choices.append(
@@ -154,12 +168,69 @@ def interactive_browse_for_export(
                         }
                     )
                 choices.append({"name": "<Готово>", "value": "__done"})
-                choice = inquirer.select(
+                return choices
+
+            while True:
+                choices = build_choices()
+                prompt = ListPrompt(
                     message=path,
                     choices=choices,
-                    instruction="↑/↓, PgUp/PgDn, Enter",
+                    instruction="↑/↓, PgUp/PgDn, Space: выбрать, Enter, / поиск",
                     height="90%",
-                ).execute()
+                    keybindings={
+                        "pageup": [{"key": "pageup"}],
+                        "pagedown": [{"key": "pagedown"}],
+                        "toggle-doc": [{"key": "space"}],
+                        "search": [{"key": "/"}],
+                    },
+                )
+
+                def _page(step: int) -> None:
+                    cc = prompt.content_control
+                    cc.selected_choice_index = max(
+                        0,
+                        min(cc.choice_count - 1, cc.selected_choice_index + step),
+                    )
+
+                def _page_up(event) -> None:
+                    _page(-10)
+
+                def _page_down(event) -> None:
+                    _page(10)
+
+                def _toggle_doc(event) -> None:
+                    val = prompt.content_control.selection["value"]
+                    if isinstance(val, tuple) and val[0] == "doc":
+                        did = val[1].get("id")
+                        toggle_descendants(did)
+                        prompt.content_control.choices = build_choices()
+                        prompt.application.invalidate()
+
+                def _search(event) -> None:
+                    q = inquirer.text(message="Поиск:", default=search["query"] or "").execute()
+                    if q:
+                        search["query"] = q
+                    if not search["query"]:
+                        return
+                    cc = prompt.content_control
+                    start = (cc.selected_choice_index + 1) % cc.choice_count
+                    for idx in range(cc.choice_count):
+                        i = (start + idx) % cc.choice_count
+                        if search["query"].lower() in cc.choices[i]["name"].lower():
+                            cc.selected_choice_index = i
+                            prompt.application.invalidate()
+                            break
+
+                prompt.kb_func_lookup.update(
+                    {
+                        "pageup": [{"func": _page_up}],
+                        "pagedown": [{"func": _page_down}],
+                        "toggle-doc": [{"func": _toggle_doc}],
+                        "search": [{"func": _search}],
+                    }
+                )
+
+                choice = prompt.execute()
                 if choice == "__up":
                     return None
                 if choice == "__done":
@@ -172,10 +243,7 @@ def interactive_browse_for_export(
                     continue
                 if choice == "__toggle_doc" and current is not None:
                     did = current.get("id")
-                    if did in selected_docs:
-                        selected_docs.remove(did)
-                    else:
-                        selected_docs.add(did)
+                    toggle_descendants(did)
                     continue
                 typ, doc = choice
                 title = doc.get("title") or "(без названия)"
@@ -185,10 +253,7 @@ def interactive_browse_for_export(
                     if res == "done":
                         return "done"
                 else:
-                    if did in selected_docs:
-                        selected_docs.remove(did)
-                    else:
-                        selected_docs.add(did)
+                    toggle_descendants(did)
 
         return browse(None, coll.get("name") or "(без названия)", None)
 
