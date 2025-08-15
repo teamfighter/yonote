@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Dict, List
@@ -22,7 +23,8 @@ except Exception:  # pragma: no cover
         def __exit__(self, exc_type, exc, tb): self.close()
 
 
-__all__ = ["fetch_all_concurrent", "format_rows", "safe_name", "tqdm"]
+__all__ = ["fetch_all_concurrent", "format_rows", "safe_name", "ensure_text", "tqdm"]
+
 
 
 def _post_page(base: str, token: str, endpoint: str, params: Dict[str, Any], limit: int, offset: int) -> Dict[str, Any]:
@@ -106,3 +108,31 @@ def safe_name(name: str, maxlen: int = 120) -> str:
     if len(name) > maxlen:
         name = name[:maxlen].rstrip()
     return name or "untitled"
+
+def ensure_text(value: Any) -> str:
+    """Return *value* decoded to text.
+
+    The Yonote API sometimes returns exported document content either as a
+    string, raw bytes, or a JSON-serialized Node.js ``Buffer`` object of the
+    form ``{"type": "Buffer", "data": [...]}``.  This helper normalizes
+    those representations into a UTF-8 ``str``.
+    """
+
+    if isinstance(value, str):
+        return value
+    if isinstance(value, (bytes, bytearray)):
+        return value.decode("utf-8")
+    if isinstance(value, dict):
+        # handle Node.js Buffer serialization
+        buf_type = value.get("type")
+        buf_data = value.get("data")
+        if buf_type == "Buffer" and isinstance(buf_data, list):
+            try:
+                return bytes(buf_data).decode("utf-8")
+            except Exception:
+                pass
+        inner = value.get("data")
+        if inner is not None and inner is not value:
+            return ensure_text(inner)
+    # Fallback to JSON string representation to avoid obscure AttributeError
+    return json.dumps(value, ensure_ascii=False)

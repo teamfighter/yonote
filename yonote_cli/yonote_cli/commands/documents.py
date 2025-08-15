@@ -21,6 +21,7 @@ from ..core import (
     interactive_select_documents,
     interactive_pick_parent,
     safe_name,
+    ensure_text,
     tqdm,
 )
 
@@ -60,6 +61,8 @@ def cmd_docs_export(args):
     base, token = get_base_and_token()
     data = http_json("POST", f"{base}/documents.export", token, {"id": args.id})
     content = data.get("data") if isinstance(data, dict) else data
+    text = ensure_text(content)
+    Path(args.out).write_text(text, encoding="utf-8")
     Path(args.out).write_text(content if isinstance(content, str) else content.decode("utf-8"), encoding="utf-8")
     print(f"Wrote {args.out}")
 
@@ -132,6 +135,7 @@ def cmd_docs_export_batch(args):
     def export_one(doc_id: str) -> Tuple[str, str | None]:
         data = http_json("POST", f"{base}/documents.export", token, {"id": doc_id})
         content = data.get("data") if isinstance(data, dict) else data
+        text = ensure_text(content)
         text = content if isinstance(content, str) else content.decode("utf-8")
         fname = name_for_id(doc_id)
         path = out_dir / fname
