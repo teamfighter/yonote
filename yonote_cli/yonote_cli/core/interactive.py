@@ -15,6 +15,15 @@ except Exception:  # pragma: no cover - optional dependency
     HAVE_INQUIRER = False
 
 
+def _execute(prompt):
+    """Execute a prompt and handle Ctrl-C gracefully."""
+    try:
+        return prompt.execute()
+    except KeyboardInterrupt:
+        print("\nОтменено пользователем", file=sys.stderr)
+        sys.exit(1)
+
+
 def _build_breadcrumbs(doc: dict, by_id: Dict[str, dict]) -> str:
     parts = [doc.get("title") or "(untitled)"]
     seen = set()
@@ -44,22 +53,24 @@ def interactive_select_documents(docs: List[dict], multiselect: bool = True) -> 
         choices.append({"name": label, "value": d.get("id")})
     choices.sort(key=lambda x: x["name"].lower())
     if multiselect:
-        result = inquirer.checkbox(
+        prompt = inquirer.checkbox(
             message="Выберите документы (Space — выбрать, Enter — подтвердить):",
             choices=choices,
             instruction="↑/↓, PgUp/PgDn, Search: /",
             transformer=lambda res: f"{len(res)} selected",
             height="90%",
             validate=lambda ans: (len(ans) > 0) or "Нужно выбрать хотя бы один документ",
-        ).execute()
+        )
+        result = _execute(prompt)
         return list(result or [])
     else:
-        result = inquirer.select(
+        prompt = inquirer.select(
             message="Выберите документ:",
             choices=choices,
             instruction="↑/↓, Search: /",
             height="90%",
-        ).execute()
+        )
+        result = _execute(prompt)
         return [result] if result else []
 
 
@@ -76,12 +87,13 @@ def interactive_pick_parent(docs: List[dict], allow_none: bool = True) -> Option
         label = f"{bc}  [{d.get('id')}]"
         choices.append({"name": label, "value": d.get("id")})
     choices.sort(key=lambda x: (x["name"] or "").lower())
-    parent = inquirer.select(
+    prompt = inquirer.select(
         message="Куда импортировать (родительский документ)?",
         choices=choices,
         instruction="↑/↓, Search: /",
         height="90%",
-    ).execute()
+    )
+    parent = _execute(prompt)
     return parent
 
 
@@ -135,7 +147,7 @@ def interactive_browse_for_export(
                 selected_docs.update(ids)
 
         def browse(parent_id: Optional[str], path: str, current: Optional[dict]) -> Optional[str]:
-            search: Dict[str, Optional[str]] = {"query": None}
+            search: Dict[str, Optional[str]] = {"query": None, "index": 0}
 
             def build_choices() -> List[dict]:
                 choices: List[dict] = [{"name": "..", "value": "__up"}]
@@ -172,9 +184,20 @@ def interactive_browse_for_export(
 
             while True:
                 choices = build_choices()
+                default_val = None
+                if search["query"]:
+                    matches = [
+                        c["value"]
+                        for c in choices
+                        if search["query"].lower() in c["name"].lower()
+                    ]
+                    if matches:
+                        default_val = matches[search["index"] % len(matches)]
+                        search["index"] = (search["index"] + 1) % len(matches)
                 prompt = ListPrompt(
                     message=path,
                     choices=choices,
+                    default=default_val,
                     instruction="↑/↓, PgUp/PgDn, Space: выбрать, Enter, / поиск",
                     height="90%",
                     keybindings={
@@ -203,23 +226,10 @@ def interactive_browse_for_export(
                     if isinstance(val, tuple) and val[0] == "doc":
                         did = val[1].get("id")
                         toggle_descendants(did)
-                        prompt.content_control.choices = build_choices()
-                        prompt.application.invalidate()
+                    event.app.exit(result="__refresh__")
 
                 def _search(event) -> None:
-                    q = inquirer.text(message="Поиск:", default=search["query"] or "").execute()
-                    if q:
-                        search["query"] = q
-                    if not search["query"]:
-                        return
-                    cc = prompt.content_control
-                    start = (cc.selected_choice_index + 1) % cc.choice_count
-                    for idx in range(cc.choice_count):
-                        i = (start + idx) % cc.choice_count
-                        if search["query"].lower() in cc.choices[i]["name"].lower():
-                            cc.selected_choice_index = i
-                            prompt.application.invalidate()
-                            break
+                    event.app.exit(result="__search__")
 
                 prompt.kb_func_lookup.update(
                     {
@@ -230,11 +240,25 @@ def interactive_browse_for_export(
                     }
                 )
 
-                choice = prompt.execute()
+                choice = _execute(prompt)
                 if choice == "__up":
                     return None
                 if choice == "__done":
                     return "done"
+                if choice == "__refresh__":
+                    continue
+                if choice == "__search__":
+                    q = _execute(
+                        inquirer.text(
+                            message="Поиск:", default=search["query"] or ""
+                        )
+                    )
+                    if q:
+                        search["query"] = q
+                        search["index"] = 0
+                    elif search["query"]:
+                        search["index"] += 1
+                    continue
                 if choice == "__toggle_coll":
                     if coll_id in selected_cols:
                         selected_cols.remove(coll_id)
@@ -266,12 +290,13 @@ def interactive_browse_for_export(
             for c in collections
         ]
         choices.append({"name": "<Экспортировать выбранное>", "value": "__done"})
-        choice = inquirer.select(
+        prompt = inquirer.select(
             message="Коллекции",
             choices=choices,
             instruction="↑/↓, PgUp/PgDn, Enter",
             height="90%",
-        ).execute()
+        )
+        choice = _execute(prompt)
         if choice == "__done":
             break
         typ, coll = choice
