@@ -193,7 +193,6 @@ def interactive_browse_for_export(
                     ]
                     if matches:
                         default_val = matches[search["index"] % len(matches)]
-                        search["index"] = (search["index"] + 1) % len(matches)
                 prompt = ListPrompt(
                     message=path,
                     choices=choices,
@@ -205,6 +204,8 @@ def interactive_browse_for_export(
                         "pagedown": [{"key": "pagedown"}],
                         "toggle-doc": [{"key": "space"}],
                         "search": [{"key": "/"}],
+                        "search-next": [{"key": "enter"}],
+                        "stop-search": [{"key": "c-s"}],
                     },
                 )
 
@@ -231,12 +232,27 @@ def interactive_browse_for_export(
                 def _search(event) -> None:
                     event.app.exit(result="__search__")
 
+                def _next_or_submit(event) -> None:
+                    if search["query"]:
+                        search["index"] += 1
+                        event.app.exit(result="__refresh__")
+                    else:
+                        val = prompt.content_control.selection["value"]
+                        event.app.exit(result=val)
+
+                def _stop_search(event) -> None:
+                    search["query"] = None
+                    search["index"] = 0
+                    event.app.exit(result="__refresh__")
+
                 prompt.kb_func_lookup.update(
                     {
                         "pageup": [{"func": _page_up}],
                         "pagedown": [{"func": _page_down}],
                         "toggle-doc": [{"func": _toggle_doc}],
                         "search": [{"func": _search}],
+                        "search-next": [{"func": _next_or_submit}],
+                        "stop-search": [{"func": _stop_search}],
                     }
                 )
 
@@ -250,14 +266,20 @@ def interactive_browse_for_export(
                 if choice == "__search__":
                     q = _execute(
                         inquirer.text(
-                            message="Поиск:", default=search["query"] or ""
+                            message="Поиск:", default=search["query"] or "",
                         )
                     )
                     if q:
-                        search["query"] = q
-                        search["index"] = 0
+                        if q == search["query"]:
+                            search["index"] += 1
+                        else:
+                            search["query"] = q
+                            search["index"] = 0
                     elif search["query"]:
                         search["index"] += 1
+                    else:
+                        search["query"] = None
+                        search["index"] = 0
                     continue
                 if choice == "__toggle_coll":
                     if coll_id in selected_cols:
