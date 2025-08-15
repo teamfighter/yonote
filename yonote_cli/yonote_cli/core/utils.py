@@ -7,6 +7,7 @@ import re
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from urllib.parse import urljoin
 from typing import Any, Dict, List
 from urllib.error import HTTPError, URLError
 from urllib.request import HTTPRedirectHandler, Request, build_opener, urlopen
@@ -38,12 +39,21 @@ __all__ = [
 
 
 
-def _post_page(base: str, token: str, endpoint: str, params: Dict[str, Any], limit: int, offset: int) -> Dict[str, Any]:
+def _post_page(
+    base: str,
+    token: str,
+    path: str,
+    params: Dict[str, Any],
+    limit: int,
+    offset: int | None,
+) -> Dict[str, Any]:
     if limit > API_MAX_LIMIT:
         limit = API_MAX_LIMIT
     payload = dict(params or {})
-    payload.update({"limit": limit, "offset": offset})
-    data = http_json("POST", f"{base}{endpoint}", token, payload)
+    if offset is not None:
+        payload.update({"limit": limit, "offset": offset})
+    url = urljoin(base, path)
+    data = http_json("POST", url, token, payload)
     if not isinstance(data, dict):
         return {"data": [], "pagination": {"total": 0}}
     if "data" not in data:
@@ -54,7 +64,7 @@ def _post_page(base: str, token: str, endpoint: str, params: Dict[str, Any], lim
 def fetch_all_concurrent(
     base: str,
     token: str,
-    endpoint: str,
+    path: str,
     *,
     params: Dict[str, Any] | None = None,
     limit: int = API_MAX_LIMIT,
@@ -65,26 +75,39 @@ def fetch_all_concurrent(
     limit = min(limit, API_MAX_LIMIT)
     params = dict(params or {})
 
-    first = _post_page(base, token, endpoint, params, limit, 0)
+    first = _post_page(base, token, path, params, limit, 0)
     items = list(first.get("data") or [])
     n_first = len(items)
 
-    if n_first < limit:
-        with tqdm(total=1, unit="pg", desc=desc) as bar:
-            bar.update(1)
-        return items
-
-    results: List[dict] = items
-    next_offset = limit
     with tqdm(total=None, unit="pg", desc=desc) as bar:
         bar.update(1)
-        while True:
-            offsets = list(range(next_offset, next_offset + limit * workers, limit))
-            if not offsets:
-                break
-            stop = False
+        pagination = first.get("pagination") or {}
+        next_path = pagination.get("nextPath")
+
+        # Sequential path-based pagination when server provides nextPath
+        if next_path:
+            results: List[dict] = items
             with ThreadPoolExecutor(max_workers=max(1, workers)) as ex:
-                futures = {ex.submit(_post_page, base, token, endpoint, params, limit, off): off for off in offsets}
+                while next_path:
+                    fut = ex.submit(_post_page, base, token, next_path, params, limit, None)
+                    data = fut.result()
+                    page_items = data.get("data") or []
+                    results.extend(page_items)
+                    bar.update(1)
+                    pagination = data.get("pagination") or {}
+                    next_path = pagination.get("nextPath")
+            return results
+
+        # Fallback to offset-based concurrent fetching
+        results: List[dict] = items
+        next_offset = limit
+        with ThreadPoolExecutor(max_workers=max(1, workers)) as ex:
+            while True:
+                offsets = list(range(next_offset, next_offset + limit * workers, limit))
+                if not offsets:
+                    break
+                stop = False
+                futures = {ex.submit(_post_page, base, token, path, params, limit, off): off for off in offsets}
                 for fut in as_completed(futures):
                     data = fut.result()
                     page_items = data.get("data") or []
@@ -92,10 +115,10 @@ def fetch_all_concurrent(
                     bar.update(1)
                     if len(page_items) < limit:
                         stop = True
-            next_offset += limit * workers
-            if stop:
-                break
-    return results
+                next_offset += limit * workers
+                if stop:
+                    break
+        return results
 
 
 def format_rows(rows: List[Dict[str, Any]], fields: List[str]) -> None:
