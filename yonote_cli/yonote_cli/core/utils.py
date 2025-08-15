@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import json
 import re
+import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Dict, List
+from urllib.error import HTTPError, URLError
+from urllib.request import HTTPRedirectHandler, Request, build_opener, urlopen
 
 from .config import API_MAX_LIMIT
 from .http import http_json
@@ -150,9 +153,9 @@ def export_document_content(base: str, token: str, doc_id: str) -> str:
     """Return exported document text.
 
     The API may return the content directly or a ``fileOperation`` object
-    that requires polling ``fileOperations.info`` until the export is
-    complete.  This helper abstracts that logic and always returns the
-    document body as UTF-8 text.
+    that requires polling ``fileOperations.redirect`` until a presigned
+    ``Location`` header is returned. This helper abstracts that logic and
+    always returns the document body as UTF-8 text.
     """
 
     data = http_json("POST", f"{base}/documents.export", token, {"id": doc_id})
@@ -172,28 +175,35 @@ def export_document_content(base: str, token: str, doc_id: str) -> str:
             fo = content.get("fileOperation")
         op_id = fo.get("id") if fo else None
         if op_id:
-            for _ in range(60):
-                info = http_json("POST", f"{base}/fileOperations.info", token, {"id": op_id})
-                if isinstance(info, (bytes, bytearray)):
+            url = f"{base}/fileOperations.redirect"
+            payload = json.dumps({"id": op_id}).encode("utf-8")
+            headers = {
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {token}",
+            }
+
+            class _NoRedirect(HTTPRedirectHandler):
+                def redirect_request(self, req, fp, code, msg, hdrs, newurl):
+                    return None
+
+            opener = build_opener(_NoRedirect)
+            for _ in range(3):
+                req = Request(url=url, method="POST", headers=headers, data=payload)
+                try:
+                    resp = opener.open(req, timeout=60)
+                except HTTPError as e:  # type: ignore[assignment]
+                    resp = e
+                location = resp.headers.get("Location")
+                body = resp.read()
+                if location:
                     try:
-                        info = json.loads(info.decode("utf-8"))
-                    except Exception:
-                        info = {}
-                info_content = info.get("data") if isinstance(info, dict) else None
-                fo_info = info.get("fileOperation")
-                if not fo_info and isinstance(info_content, dict):
-                    fo_info = info_content.get("fileOperation")
-                state = fo_info.get("state") if isinstance(fo_info, dict) else None
-                if state == "complete":
-                    raw = http_json(
-                        "POST",
-                        f"{base}/fileOperations.redirect",
-                        token,
-                        {"id": op_id},
-                    )
-                    return ensure_text(raw)
-                if state == "error":
-                    raise RuntimeError(fo_info.get("error") or "export failed")
+                        with urlopen(location, timeout=60) as final:
+                            return ensure_text(final.read())
+                    except HTTPError as e:
+                        err_body = e.read().decode("utf-8", errors="ignore")
+                        print(f"[HTTP {e.code}] {err_body}", file=sys.stderr)
+                        sys.exit(2)
                 time.sleep(0.5)
             raise RuntimeError("export timed out")
 
