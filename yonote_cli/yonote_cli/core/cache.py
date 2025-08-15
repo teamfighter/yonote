@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any, Dict, List
 
-from .config import CACHE_PATH, API_MAX_LIMIT
+from .config import CACHE_PATH
 from .utils import fetch_all_concurrent
 
 
@@ -43,7 +43,6 @@ def list_documents_in_collection(
         token,
         "/documents.list",
         params={"collectionId": collection_id},
-        limit=API_MAX_LIMIT,
         workers=workers,
         desc="Fetch docs",
     )
