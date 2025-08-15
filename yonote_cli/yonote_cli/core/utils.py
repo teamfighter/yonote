@@ -26,6 +26,7 @@ except Exception:  # pragma: no cover
 __all__ = ["fetch_all_concurrent", "format_rows", "safe_name", "ensure_text", "tqdm"]
 
 
+
 def _post_page(base: str, token: str, endpoint: str, params: Dict[str, Any], limit: int, offset: int) -> Dict[str, Any]:
     if limit > API_MAX_LIMIT:
         limit = API_MAX_LIMIT
@@ -107,7 +108,6 @@ def safe_name(name: str, maxlen: int = 120) -> str:
     if len(name) > maxlen:
         name = name[:maxlen].rstrip()
     return name or "untitled"
-
 
 def ensure_text(value: Any) -> str:
     """Return *value* decoded to text.

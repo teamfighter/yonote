@@ -63,6 +63,7 @@ def cmd_docs_export(args):
     content = data.get("data") if isinstance(data, dict) else data
     text = ensure_text(content)
     Path(args.out).write_text(text, encoding="utf-8")
+    Path(args.out).write_text(content if isinstance(content, str) else content.decode("utf-8"), encoding="utf-8")
     print(f"Wrote {args.out}")
 
 
@@ -135,6 +136,7 @@ def cmd_docs_export_batch(args):
         data = http_json("POST", f"{base}/documents.export", token, {"id": doc_id})
         content = data.get("data") if isinstance(data, dict) else data
         text = ensure_text(content)
+        text = content if isinstance(content, str) else content.decode("utf-8")
         fname = name_for_id(doc_id)
         path = out_dir / fname
         path.write_text(text, encoding="utf-8")
