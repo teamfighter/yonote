@@ -11,6 +11,7 @@ from .documents import (
     cmd_docs_import_dir,
     cmd_docs_tree,
 )
+from .export import cmd_export
 
 __all__ = [
     "cmd_auth_set",
@@ -25,4 +26,5 @@ __all__ = [
     "cmd_docs_import",
     "cmd_docs_import_dir",
     "cmd_docs_tree",
+    "cmd_export",
 ]

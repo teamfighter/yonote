@@ -11,6 +11,7 @@ from .commands import (
     cmd_auth_info,
     cache_info,
     cache_clear,
+    cmd_export,
     cmd_collections_list,
     cmd_collections_export,
     cmd_docs_list,
@@ -45,6 +46,28 @@ def main(argv=None):
     p_cache_info.set_defaults(func=cache_info)
     p_cache_clear = sub_cache.add_parser("clear", help="Delete cache file")
     p_cache_clear.set_defaults(func=cache_clear)
+
+    # unified export
+    p_exp = sub.add_parser("export", help="Interactive export of documents/collections")
+    p_exp.add_argument("--out-dir", required=True, help="Output directory")
+    p_exp.add_argument("--workers", type=int, default=8, help="Parallel workers")
+    p_exp.add_argument(
+        "--format",
+        choices=["md", "markdown", "html", "json"],
+        default="md",
+        help="Export format (API returns Markdown by default)",
+    )
+    p_exp.add_argument(
+        "--use-ids",
+        action="store_true",
+        help="Name files by document/collection IDs instead of titles",
+    )
+    p_exp.add_argument(
+        "--refresh-cache",
+        action="store_true",
+        help="Ignore cache and refetch collections/documents",
+    )
+    p_exp.set_defaults(func=cmd_export)
 
     # collections
     p_cols = sub.add_parser("collections", help="Collections")

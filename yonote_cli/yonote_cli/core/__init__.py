@@ -10,8 +10,12 @@ from .utils import (
     export_document_content,
     tqdm,
 )
-from .cache import load_cache, save_cache, list_documents_in_collection
-from .interactive import interactive_select_documents, interactive_pick_parent
+from .cache import load_cache, save_cache, list_documents_in_collection, list_collections
+from .interactive import (
+    interactive_select_documents,
+    interactive_pick_parent,
+    interactive_browse_for_export,
+)
 
 __all__ = [
     "CONFIG_PATH", "CACHE_PATH", "DEFAULT_BASE", "API_MAX_LIMIT",
@@ -23,6 +27,6 @@ __all__ = [
     "ensure_text",
     "export_document_content",
     "tqdm",
-    "load_cache", "save_cache", "list_documents_in_collection",
-    "interactive_select_documents", "interactive_pick_parent",
+    "load_cache", "save_cache", "list_documents_in_collection", "list_collections",
+    "interactive_select_documents", "interactive_pick_parent", "interactive_browse_for_export",
 ]

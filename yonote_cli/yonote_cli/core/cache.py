@@ -25,6 +25,32 @@ def save_cache(cache: dict) -> None:
         pass
 
 
+def list_collections(
+    base: str,
+    token: str,
+    *,
+    use_cache: bool,
+    refresh_cache: bool,
+    workers: int,
+) -> List[dict]:
+    cache = load_cache() if use_cache else {}
+    if use_cache and not refresh_cache and "collections" in cache:
+        return cache["collections"]
+    cols = fetch_all_concurrent(
+        base,
+        token,
+        "/collections.list",
+        params={},
+        limit=API_MAX_LIMIT,
+        workers=workers,
+        desc="Fetch collections",
+    )
+    if use_cache:
+        cache["collections"] = cols
+        save_cache(cache)
+    return cols
+
+
 def list_documents_in_collection(
     base: str,
     token: str,
