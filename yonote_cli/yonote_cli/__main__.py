@@ -12,6 +12,7 @@ from .commands import (
     cache_info,
     cache_clear,
     cmd_export,
+    cmd_import,
 )
 
 
@@ -60,6 +61,17 @@ def main(argv=None):
         help="Ignore cache and refetch collections/documents",
     )
     p_exp.set_defaults(func=cmd_export)
+
+    # import
+    p_imp = sub.add_parser("import", help="Import Markdown files into Yonote")
+    p_imp.add_argument("--src-dir", required=True, help="Directory with .md files")
+    p_imp.add_argument("--workers", type=int, default=8, help="Parallel workers")
+    p_imp.add_argument(
+        "--refresh-cache",
+        action="store_true",
+        help="Ignore cache and refetch collections/documents",
+    )
+    p_imp.set_defaults(func=cmd_import)
 
 
     args = parser.parse_args(argv)

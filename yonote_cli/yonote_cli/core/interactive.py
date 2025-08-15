@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 import sys
 
 from .cache import list_collections, list_documents_in_collection
@@ -147,7 +147,7 @@ def interactive_browse_for_export(
                 selected_docs.update(ids)
 
         def browse(parent_id: Optional[str], path: str, current: Optional[dict]) -> Optional[str]:
-            search: Dict[str, Optional[str]] = {"query": None, "index": 0}
+            search: Dict[str, Optional[object]] = {"query": None, "index": 0, "default": None}
 
             def build_choices() -> List[dict]:
                 choices: List[dict] = [{"name": "..", "value": "__up"}]
@@ -184,7 +184,7 @@ def interactive_browse_for_export(
 
             while True:
                 choices = build_choices()
-                default_val = None
+                default_val = search.pop("default", None)
                 if search["query"]:
                     matches = [
                         c["value"]
@@ -223,6 +223,7 @@ def interactive_browse_for_export(
                     _page(10)
 
                 def _toggle_doc(event) -> None:
+                    search["default"] = prompt.content_control.selection["value"]
                     val = prompt.content_control.selection["value"]
                     if isinstance(val, tuple) and val[0] == "doc":
                         did = val[1].get("id")
@@ -230,11 +231,13 @@ def interactive_browse_for_export(
                     event.app.exit(result="__refresh__")
 
                 def _search(event) -> None:
+                    search["default"] = prompt.content_control.selection["value"]
                     event.app.exit(result="__search__")
 
                 def _next_or_submit(event) -> None:
                     if search["query"]:
                         search["index"] += 1
+                        search["default"] = prompt.content_control.selection["value"]
                         event.app.exit(result="__refresh__")
                     else:
                         val = prompt.content_control.selection["value"]
@@ -243,6 +246,7 @@ def interactive_browse_for_export(
                 def _stop_search(event) -> None:
                     search["query"] = None
                     search["index"] = 0
+                    search["default"] = prompt.content_control.selection["value"]
                     event.app.exit(result="__refresh__")
 
                 prompt.kb_func_lookup.update(
@@ -327,3 +331,194 @@ def interactive_browse_for_export(
             break
 
     return list(selected_docs), list(selected_cols)
+
+
+def interactive_pick_destination(
+    base: str,
+    token: str,
+    *,
+    workers: int,
+    refresh_cache: bool,
+) -> Tuple[str, Optional[str], str]:
+    """Return ``(collection_id, parent_doc_id, label)`` for import."""
+    if not HAVE_INQUIRER:
+        print(
+            "Interactive mode requires InquirerPy. Install:\n  pip install InquirerPy",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+
+    collections = list_collections(
+        base, token, use_cache=True, refresh_cache=refresh_cache, workers=workers
+    )
+
+    def browse_collection(coll: dict) -> Tuple[str, Optional[str], str] | None:
+        coll_id = coll.get("id")
+        docs = list_documents_in_collection(
+            base,
+            token,
+            coll_id,
+            use_cache=True,
+            refresh_cache=refresh_cache,
+            workers=workers,
+        )
+
+        children: Dict[Optional[str], List[dict]] = {}
+        for d in docs:
+            children.setdefault(d.get("parentDocumentId"), []).append(d)
+
+        def browse(parent_id: Optional[str], path: str) -> Tuple[str, Optional[str], str] | None:
+            search: Dict[str, Optional[object]] = {"query": None, "index": 0, "default": None}
+
+            def build_choices() -> List[dict]:
+                choices: List[dict] = [{"name": "..", "value": "__up"}]
+                if parent_id is None:
+                    choices.append(
+                        {
+                            "name": "Импортировать в корень коллекции",
+                            "value": "__choose__",
+                        }
+                    )
+                else:
+                    choices.append(
+                        {
+                            "name": "Импортировать сюда",
+                            "value": "__choose__",
+                        }
+                    )
+                for d in children.get(parent_id, []):
+                    did = d.get("id")
+                    title = d.get("title") or "(без названия)"
+                    suffix = "/" if did in children else ""
+                    choices.append({"name": f"{title}{suffix}", "value": ("doc", d)})
+                return choices
+
+            while True:
+                choices = build_choices()
+                default_val = search.pop("default", None)
+                if search["query"]:
+                    matches = [
+                        c["value"]
+                        for c in choices
+                        if search["query"].lower() in c["name"].lower()
+                    ]
+                    if matches:
+                        default_val = matches[search["index"] % len(matches)]
+                prompt = ListPrompt(
+                    message=path,
+                    choices=choices,
+                    default=default_val,
+                    instruction="↑/↓, PgUp/PgDn, Space: выбрать, Enter, / поиск",
+                    height="90%",
+                    keybindings={
+                        "pageup": [{"key": "pageup"}],
+                        "pagedown": [{"key": "pagedown"}],
+                        "choose": [{"key": "space"}],
+                        "search": [{"key": "/"}],
+                        "search-next": [{"key": "enter"}],
+                        "stop-search": [{"key": "c-s"}],
+                    },
+                )
+
+                def _page(step: int) -> None:
+                    cc = prompt.content_control
+                    cc.selected_choice_index = max(
+                        0,
+                        min(cc.choice_count - 1, cc.selected_choice_index + step),
+                    )
+
+                def _page_up(event) -> None:
+                    _page(-10)
+
+                def _page_down(event) -> None:
+                    _page(10)
+
+                def _choose(event) -> None:
+                    search["default"] = prompt.content_control.selection["value"]
+                    event.app.exit(result="__choose__")
+
+                def _search(event) -> None:
+                    search["default"] = prompt.content_control.selection["value"]
+                    event.app.exit(result="__search__")
+
+                def _next_or_submit(event) -> None:
+                    if search["query"]:
+                        search["index"] += 1
+                        search["default"] = prompt.content_control.selection["value"]
+                        event.app.exit(result="__refresh__")
+                    else:
+                        val = prompt.content_control.selection["value"]
+                        event.app.exit(result=val)
+
+                def _stop_search(event) -> None:
+                    search["query"] = None
+                    search["index"] = 0
+                    search["default"] = prompt.content_control.selection["value"]
+                    event.app.exit(result="__refresh__")
+
+                prompt.kb_func_lookup.update(
+                    {
+                        "pageup": [{"func": _page_up}],
+                        "pagedown": [{"func": _page_down}],
+                        "choose": [{"func": _choose}],
+                        "search": [{"func": _search}],
+                        "search-next": [{"func": _next_or_submit}],
+                        "stop-search": [{"func": _stop_search}],
+                    }
+                )
+
+                choice = _execute(prompt)
+                if choice == "__up":
+                    return None
+                if choice == "__refresh__":
+                    continue
+                if choice == "__search__":
+                    q = _execute(
+                        inquirer.text(
+                            message="Поиск:", default=search["query"] or "",
+                        )
+                    )
+                    if q:
+                        if q == search["query"]:
+                            search["index"] += 1
+                        else:
+                            search["query"] = q
+                            search["index"] = 0
+                    elif search["query"]:
+                        search["index"] += 1
+                    else:
+                        search["query"] = None
+                        search["index"] = 0
+                    continue
+                if choice == "__choose__":
+                    label = path if parent_id is None else f"{path}"
+                    return (coll_id, parent_id, label)
+                typ, obj = choice
+                did = obj.get("id")
+                title = obj.get("title") or "(без названия)"
+                if did in children:
+                    res = browse(did, f"{path}/{title}")
+                    if res:
+                        return res
+                else:
+                    # leaf node selected via Enter behaves like choose
+                    return (coll_id, did, f"{path}/{title}")
+
+        return browse(None, coll.get("name") or "(без названия)")
+
+    while True:
+        choices = [
+            {"name": c.get("name") or "(без названия)", "value": c} for c in collections
+        ]
+        prompt = inquirer.select(
+            message="Коллекции",
+            choices=choices,
+            instruction="↑/↓, PgUp/PgDn, Enter",
+            height="90%",
+        )
+        coll = _execute(prompt)
+        if not coll:
+            continue
+        res = browse_collection(coll)
+        if res:
+            return res

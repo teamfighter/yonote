@@ -15,6 +15,7 @@ from .interactive import (
     interactive_select_documents,
     interactive_pick_parent,
     interactive_browse_for_export,
+    interactive_pick_destination,
 )
 
 __all__ = [
@@ -29,4 +30,5 @@ __all__ = [
     "tqdm",
     "load_cache", "save_cache", "list_documents_in_collection", "list_collections",
     "interactive_select_documents", "interactive_pick_parent", "interactive_browse_for_export",
+    "interactive_pick_destination",
 ]
