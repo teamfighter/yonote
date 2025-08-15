@@ -4,8 +4,13 @@ from __future__ import annotations
 
 import json
 import re
+import sys
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from urllib.parse import urljoin
 from typing import Any, Dict, List
+from urllib.error import HTTPError, URLError
+from urllib.request import HTTPRedirectHandler, Request, build_opener, urlopen
 
 from .config import API_MAX_LIMIT
 from .http import http_json
@@ -23,16 +28,32 @@ except Exception:  # pragma: no cover
         def __exit__(self, exc_type, exc, tb): self.close()
 
 
-__all__ = ["fetch_all_concurrent", "format_rows", "safe_name", "ensure_text", "tqdm"]
+__all__ = [
+    "fetch_all_concurrent",
+    "format_rows",
+    "safe_name",
+    "ensure_text",
+    "export_document_content",
+    "tqdm",
+]
 
 
 
-def _post_page(base: str, token: str, endpoint: str, params: Dict[str, Any], limit: int, offset: int) -> Dict[str, Any]:
+def _post_page(
+    base: str,
+    token: str,
+    path: str,
+    params: Dict[str, Any],
+    limit: int,
+    offset: int | None,
+) -> Dict[str, Any]:
     if limit > API_MAX_LIMIT:
         limit = API_MAX_LIMIT
     payload = dict(params or {})
-    payload.update({"limit": limit, "offset": offset})
-    data = http_json("POST", f"{base}{endpoint}", token, payload)
+    if offset is not None:
+        payload.update({"limit": limit, "offset": offset})
+    url = urljoin(base, path)
+    data = http_json("POST", url, token, payload)
     if not isinstance(data, dict):
         return {"data": [], "pagination": {"total": 0}}
     if "data" not in data:
@@ -43,7 +64,7 @@ def _post_page(base: str, token: str, endpoint: str, params: Dict[str, Any], lim
 def fetch_all_concurrent(
     base: str,
     token: str,
-    endpoint: str,
+    path: str,
     *,
     params: Dict[str, Any] | None = None,
     limit: int = API_MAX_LIMIT,
@@ -54,26 +75,39 @@ def fetch_all_concurrent(
     limit = min(limit, API_MAX_LIMIT)
     params = dict(params or {})
 
-    first = _post_page(base, token, endpoint, params, limit, 0)
+    first = _post_page(base, token, path, params, limit, 0)
     items = list(first.get("data") or [])
     n_first = len(items)
 
-    if n_first < limit:
-        with tqdm(total=1, unit="pg", desc=desc) as bar:
-            bar.update(1)
-        return items
-
-    results: List[dict] = items
-    next_offset = limit
     with tqdm(total=None, unit="pg", desc=desc) as bar:
         bar.update(1)
-        while True:
-            offsets = list(range(next_offset, next_offset + limit * workers, limit))
-            if not offsets:
-                break
-            stop = False
+        pagination = first.get("pagination") or {}
+        next_path = pagination.get("nextPath")
+
+        # Sequential path-based pagination when server provides nextPath
+        if next_path:
+            results: List[dict] = items
             with ThreadPoolExecutor(max_workers=max(1, workers)) as ex:
-                futures = {ex.submit(_post_page, base, token, endpoint, params, limit, off): off for off in offsets}
+                while next_path:
+                    fut = ex.submit(_post_page, base, token, next_path, params, limit, None)
+                    data = fut.result()
+                    page_items = data.get("data") or []
+                    results.extend(page_items)
+                    bar.update(1)
+                    pagination = data.get("pagination") or {}
+                    next_path = pagination.get("nextPath")
+            return results
+
+        # Fallback to offset-based concurrent fetching
+        results: List[dict] = items
+        next_offset = limit
+        with ThreadPoolExecutor(max_workers=max(1, workers)) as ex:
+            while True:
+                offsets = list(range(next_offset, next_offset + limit * workers, limit))
+                if not offsets:
+                    break
+                stop = False
+                futures = {ex.submit(_post_page, base, token, path, params, limit, off): off for off in offsets}
                 for fut in as_completed(futures):
                     data = fut.result()
                     page_items = data.get("data") or []
@@ -81,10 +115,10 @@ def fetch_all_concurrent(
                     bar.update(1)
                     if len(page_items) < limit:
                         stop = True
-            next_offset += limit * workers
-            if stop:
-                break
-    return results
+                next_offset += limit * workers
+                if stop:
+                    break
+        return results
 
 
 def format_rows(rows: List[Dict[str, Any]], fields: List[str]) -> None:
@@ -132,7 +166,68 @@ def ensure_text(value: Any) -> str:
             except Exception:
                 pass
         inner = value.get("data")
-        if inner is not None and inner is not value:
+        if inner is not None and set(value.keys()) == {"data"}:
             return ensure_text(inner)
     # Fallback to JSON string representation to avoid obscure AttributeError
     return json.dumps(value, ensure_ascii=False)
+
+
+def export_document_content(base: str, token: str, doc_id: str) -> str:
+    """Return exported document text.
+
+    The API may return the content directly or a ``fileOperation`` object
+    that requires polling ``fileOperations.redirect`` until a presigned
+    ``Location`` header is returned. This helper abstracts that logic and
+    always returns the document body as UTF-8 text.
+    """
+
+    data = http_json("POST", f"{base}/documents.export", token, {"id": doc_id})
+
+    if isinstance(data, (bytes, bytearray)):
+        try:
+            data = json.loads(data.decode("utf-8"))
+        except Exception:
+            return ensure_text(data)
+
+    if isinstance(data, dict):
+        content = data.get("data")
+        if content is not None and not isinstance(content, dict):
+            return ensure_text(content)
+        fo = data.get("fileOperation")
+        if not fo and isinstance(content, dict):
+            fo = content.get("fileOperation")
+        op_id = fo.get("id") if fo else None
+        if op_id:
+            url = f"{base}/fileOperations.redirect"
+            payload = json.dumps({"id": op_id}).encode("utf-8")
+            headers = {
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {token}",
+            }
+
+            class _NoRedirect(HTTPRedirectHandler):
+                def redirect_request(self, req, fp, code, msg, hdrs, newurl):
+                    return None
+
+            opener = build_opener(_NoRedirect)
+            for _ in range(3):
+                req = Request(url=url, method="POST", headers=headers, data=payload)
+                try:
+                    resp = opener.open(req, timeout=60)
+                except HTTPError as e:  # type: ignore[assignment]
+                    resp = e
+                location = resp.headers.get("Location")
+                body = resp.read()
+                if location:
+                    try:
+                        with urlopen(location, timeout=60) as final:
+                            return ensure_text(final.read())
+                    except HTTPError as e:
+                        err_body = e.read().decode("utf-8", errors="ignore")
+                        print(f"[HTTP {e.code}] {err_body}", file=sys.stderr)
+                        sys.exit(2)
+                time.sleep(0.5)
+            raise RuntimeError("export timed out")
+
+    return ensure_text(data)
