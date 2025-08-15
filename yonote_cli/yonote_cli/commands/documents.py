@@ -130,7 +130,10 @@ def cmd_docs_export_batch(args):
 
     def build_path(doc_id: str) -> Path:
         info = get_info(doc_id)
-        name = doc_id if args.use_ids else safe_name(info.get("title") or doc_id)
+        if args.use_ids:
+            name = doc_id
+        else:
+            name = safe_name(info.get("title") or "(без названия)")
         parts = [f"{name}.{ext}"]
         seen_ids = {doc_id}
         cur = info
@@ -142,7 +145,10 @@ def cmd_docs_export_batch(args):
             parent = get_info(pid)
             if not parent:
                 break
-            segment = pid if args.use_ids else safe_name(parent.get("title") or pid)
+            if args.use_ids:
+                segment = pid
+            else:
+                segment = safe_name(parent.get("title") or "(без названия)")
             parts.insert(0, segment)
             cur = parent
         return out_dir.joinpath(*parts)

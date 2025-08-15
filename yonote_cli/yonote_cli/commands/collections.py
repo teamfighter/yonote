@@ -69,7 +69,7 @@ def cmd_collections_export(args):
     ext = args.format if args.format != "markdown" else "md"
 
     def build_path(doc: dict) -> Path:
-        title = safe_name(doc.get("title") or doc.get("id"))
+        title = safe_name(doc.get("title") or "(без названия)")
         if not args.tree:
             return out_dir / f"{title}.{ext}"
         parts = [f"{title}.{ext}"]
@@ -83,7 +83,7 @@ def cmd_collections_export(args):
             parent = by_id.get(pid)
             if not parent:
                 break
-            parts.insert(0, safe_name(parent.get("title") or parent.get("id")))
+            parts.insert(0, safe_name(parent.get("title") or "(без названия)"))
             cur = parent
         return out_dir.joinpath(*parts)
 

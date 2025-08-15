@@ -140,7 +140,7 @@ def ensure_text(value: Any) -> str:
             except Exception:
                 pass
         inner = value.get("data")
-        if inner is not None and inner is not value:
+        if inner is not None and set(value.keys()) == {"data"}:
             return ensure_text(inner)
     # Fallback to JSON string representation to avoid obscure AttributeError
     return json.dumps(value, ensure_ascii=False)
@@ -164,10 +164,13 @@ def export_document_content(base: str, token: str, doc_id: str) -> str:
             return ensure_text(data)
 
     if isinstance(data, dict):
-        if "data" in data and not isinstance(data["data"], dict):
-            return ensure_text(data["data"])
-        fo = data.get("fileOperation") or {}
-        op_id = fo.get("id")
+        content = data.get("data")
+        if content is not None and not isinstance(content, dict):
+            return ensure_text(content)
+        fo = data.get("fileOperation")
+        if not fo and isinstance(content, dict):
+            fo = content.get("fileOperation")
+        op_id = fo.get("id") if fo else None
         if op_id:
             for _ in range(60):
                 info = http_json("POST", f"{base}/fileOperations.info", token, {"id": op_id})
@@ -176,8 +179,11 @@ def export_document_content(base: str, token: str, doc_id: str) -> str:
                         info = json.loads(info.decode("utf-8"))
                     except Exception:
                         info = {}
-                fo_data = info.get("data") if isinstance(info, dict) else {}
-                state = fo_data.get("state")
+                info_content = info.get("data") if isinstance(info, dict) else None
+                fo_info = info.get("fileOperation")
+                if not fo_info and isinstance(info_content, dict):
+                    fo_info = info_content.get("fileOperation")
+                state = fo_info.get("state") if isinstance(fo_info, dict) else None
                 if state == "complete":
                     raw = http_json(
                         "GET",
@@ -186,7 +192,7 @@ def export_document_content(base: str, token: str, doc_id: str) -> str:
                     )
                     return ensure_text(raw)
                 if state == "error":
-                    raise RuntimeError(fo_data.get("error") or "export failed")
+                    raise RuntimeError(fo_info.get("error") or "export failed")
                 time.sleep(0.5)
             raise RuntimeError("export timed out")
 
