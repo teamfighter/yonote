@@ -186,9 +186,10 @@ def export_document_content(base: str, token: str, doc_id: str) -> str:
                 state = fo_info.get("state") if isinstance(fo_info, dict) else None
                 if state == "complete":
                     raw = http_json(
-                        "GET",
-                        f"{base}/fileOperations.redirect?id={op_id}",
+                        "POST",
+                        f"{base}/fileOperations.redirect",
                         token,
+                        {"id": op_id},
                     )
                     return ensure_text(raw)
                 if state == "error":
