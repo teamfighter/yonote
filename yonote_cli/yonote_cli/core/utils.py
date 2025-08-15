@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Dict, List
 
@@ -23,7 +24,14 @@ except Exception:  # pragma: no cover
         def __exit__(self, exc_type, exc, tb): self.close()
 
 
-__all__ = ["fetch_all_concurrent", "format_rows", "safe_name", "ensure_text", "tqdm"]
+__all__ = [
+    "fetch_all_concurrent",
+    "format_rows",
+    "safe_name",
+    "ensure_text",
+    "export_document_content",
+    "tqdm",
+]
 
 
 
@@ -136,3 +144,45 @@ def ensure_text(value: Any) -> str:
             return ensure_text(inner)
     # Fallback to JSON string representation to avoid obscure AttributeError
     return json.dumps(value, ensure_ascii=False)
+
+
+def export_document_content(base: str, token: str, doc_id: str) -> str:
+    """Return exported document text.
+
+    The API may return the content directly or a ``fileOperation`` object
+    that requires polling ``fileOperations.info`` until the export is
+    complete.  This helper abstracts that logic and always returns the
+    document body as UTF-8 text.
+    """
+
+    data = http_json("POST", f"{base}/documents.export", token, {"id": doc_id})
+
+    if isinstance(data, dict):
+        if "data" in data:
+            return ensure_text(data["data"])
+        fo = data.get("fileOperation") or {}
+        op_id = fo.get("id")
+        if op_id:
+            for _ in range(60):
+                info = http_json(
+                    "POST",
+                    f"{base}/fileOperations.info",
+                    token,
+                    {"id": op_id},
+                )
+                fo_data = info.get("data") if isinstance(info, dict) else {}
+                state = fo_data.get("state")
+                if state == "complete":
+                    raw = http_json(
+                        "POST",
+                        f"{base}/fileOperations.redirect",
+                        token,
+                        {"id": op_id},
+                    )
+                    return ensure_text(raw)
+                if state == "error":
+                    raise RuntimeError(fo_data.get("error") or "export failed")
+                time.sleep(0.5)
+            raise RuntimeError("export timed out")
+
+    return ensure_text(data)

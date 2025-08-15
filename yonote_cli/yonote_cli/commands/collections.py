@@ -15,7 +15,7 @@ from ..core import (
     http_json,
     list_documents_in_collection,
     safe_name,
-    ensure_text,
+    export_document_content,
     tqdm,
 )
 
@@ -91,9 +91,7 @@ def cmd_collections_export(args):
         doc_id = doc.get("id")
         if not doc_id:
             return ("", "missing id")
-        data = http_json("POST", f"{base}/documents.export", token, {"id": doc_id})
-        content = data.get("data") if isinstance(data, dict) else data
-        text = ensure_text(content)
+        text = export_document_content(base, token, doc_id)
         path = build_path(doc)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text, encoding="utf-8")

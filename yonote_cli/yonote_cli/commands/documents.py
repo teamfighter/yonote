@@ -21,7 +21,7 @@ from ..core import (
     interactive_select_documents,
     interactive_pick_parent,
     safe_name,
-    ensure_text,
+    export_document_content,
     tqdm,
 )
 
@@ -59,9 +59,7 @@ def cmd_docs_list(args):
 
 def cmd_docs_export(args):
     base, token = get_base_and_token()
-    data = http_json("POST", f"{base}/documents.export", token, {"id": args.id})
-    content = data.get("data") if isinstance(data, dict) else data
-    text = ensure_text(content)
+    text = export_document_content(base, token, args.id)
     Path(args.out).write_text(text, encoding="utf-8")
     print(f"Wrote {args.out}")
 
@@ -84,6 +82,7 @@ def cmd_docs_export_batch(args):
     ids: List[str] = []
     ids.extend(args.id or [])
 
+    docs: List[dict] = []
     if args.interactive:
         if not args.collection_id:
             print("Interactive export requires --collection-id.", file=sys.stderr)
@@ -118,27 +117,45 @@ def cmd_docs_export_batch(args):
 
     ext = args.format if args.format != "markdown" else "md"
 
-    def name_for_id(doc_id: str) -> str:
-        if not args.use_titles:
-            return f"{doc_id}.{ext}"
-        try:
-            info = http_json("POST", f"{base}/documents.info", token, {"id": doc_id})
-            title = (isinstance(info, dict) and (info.get("data") or {}).get("title")) or None
-            safe = safe_name(title or doc_id)
-            return f"{safe}.{ext}"
-        except SystemExit:
-            raise
-        except Exception:
-            return f"{doc_id}.{ext}"
+    info_cache: Dict[str, dict] = {d.get("id"): d for d in docs if d.get("id")}
+
+    def get_info(doc_id: str) -> dict:
+        if doc_id not in info_cache:
+            try:
+                data = http_json("POST", f"{base}/documents.info", token, {"id": doc_id})
+                info_cache[doc_id] = data.get("data") if isinstance(data, dict) else {}
+            except Exception:
+                info_cache[doc_id] = {}
+        return info_cache.get(doc_id, {})
+
+    def build_path(doc_id: str) -> Path:
+        info = get_info(doc_id)
+        name = safe_name(info.get("title") or doc_id) if args.use_titles else doc_id
+        parts = [f"{name}.{ext}"]
+        seen_ids = {doc_id}
+        cur = info
+        while True:
+            pid = cur.get("parentDocumentId")
+            if not pid or pid in seen_ids:
+                break
+            seen_ids.add(pid)
+            parent = get_info(pid)
+            if not parent:
+                break
+            segment = safe_name(parent.get("title") or pid) if args.use_titles else pid
+            parts.insert(0, segment)
+            cur = parent
+        return out_dir.joinpath(*parts)
 
     def export_one(doc_id: str) -> Tuple[str, str | None]:
-        data = http_json("POST", f"{base}/documents.export", token, {"id": doc_id})
-        content = data.get("data") if isinstance(data, dict) else data
-        text = ensure_text(content)
-        fname = name_for_id(doc_id)
-        path = out_dir / fname
-        path.write_text(text, encoding="utf-8")
-        return (str(path), None)
+        try:
+            text = export_document_content(base, token, doc_id)
+            path = build_path(doc_id)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text, encoding="utf-8")
+            return (str(path), None)
+        except Exception as e:
+            return ("", str(e))
 
     total = len(unique_ids)
     errors: List[Tuple[str, str]] = []
