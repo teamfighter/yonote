@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any, Dict, List
 
-from .config import CACHE_PATH
+from .config import CACHE_PATH, API_MAX_LIMIT
 from .utils import fetch_all_concurrent
 
 
@@ -75,4 +75,51 @@ def list_documents_in_collection(
     if use_cache:
         cache[coll_key] = docs
         save_cache(cache)
+    return docs
+
+
+def refresh_document_branch(
+    base: str,
+    token: str,
+    collection_id: str,
+    parent_id: str | None,
+    *,
+    workers: int,
+) -> List[dict]:
+    """Refresh cached documents under *parent_id* within *collection_id*.
+
+    Returns the updated list of all documents for the collection.
+    """
+
+    cache = load_cache()
+    coll_key = f"collection:{collection_id}"
+    docs: List[Dict[str, Any]] = cache.get(coll_key, [])
+
+    params: Dict[str, Any] = {"collectionId": collection_id}
+    if parent_id is not None:
+        params["parentDocumentId"] = parent_id
+    else:
+        params["parentDocumentId"] = None
+
+    new_children = fetch_all_concurrent(
+        base,
+        token,
+        "/documents.list",
+        params=params,
+        workers=workers,
+        desc="Refresh docs",
+    )
+
+    to_remove: set[str] = set()
+    stack = [d.get("id") for d in docs if d.get("parentDocumentId") == parent_id]
+    while stack:
+        cur = stack.pop()
+        to_remove.add(cur)
+        stack.extend(d.get("id") for d in docs if d.get("parentDocumentId") == cur)
+
+    docs = [d for d in docs if d.get("id") not in to_remove]
+    docs.extend(new_children)
+
+    cache[coll_key] = docs
+    save_cache(cache)
     return docs

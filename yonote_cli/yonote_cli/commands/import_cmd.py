@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 
 from ..core import (
     get_base_and_token,
-    http_multipart_post,
+    http_json,
     interactive_pick_destination,
     ensure_text,
     tqdm,
@@ -40,20 +40,45 @@ def cmd_import(args):
             break
 
     errors: List[Tuple[str, str]] = []
+
+    def _create_doc(title: str, text: str, parent: Optional[str]) -> Optional[str]:
+        payload = {
+            "title": title,
+            "text": text,
+            "collectionId": coll_id,
+            "publish": True,
+        }
+        if parent:
+            payload["parentDocumentId"] = parent
+        try:
+            resp = http_json("POST", f"{base}/documents.create", token, payload)
+            if isinstance(resp, dict):
+                data = resp.get("data")
+                if isinstance(data, dict):
+                    return data.get("id")
+            return None
+        except Exception as e:
+            errors.append((title, ensure_text(str(e))))
+            return None
+
+    def _import_dir(path: Path, parent: Optional[str]):
+        for entry in sorted(path.iterdir()):
+            if entry.is_dir():
+                doc_id = _create_doc(entry.name, "", parent)
+                if doc_id:
+                    _import_dir(entry, doc_id)
+            elif entry.is_file() and entry.suffix.lower() == ".md":
+                try:
+                    content = entry.read_text(encoding="utf-8")
+                except Exception as e:
+                    errors.append((str(entry), ensure_text(str(e))))
+                    bar.update(1)
+                    continue
+                _create_doc(entry.stem, content, parent)
+                bar.update(1)
+
     with tqdm(total=len(files), unit="doc", desc="Importing") as bar:
-        for path in files:
-            try:
-                content = path.read_bytes()
-                fields = {
-                    "file": (path.name, content, "text/markdown"),
-                    "collectionId": coll_id,
-                }
-                if parent_id:
-                    fields["parentDocumentId"] = parent_id
-                http_multipart_post(f"{base}/documents.import", token, fields)
-            except Exception as e:
-                errors.append((str(path), ensure_text(str(e))))
-            bar.update(1)
+        _import_dir(src_dir, parent_id)
 
     print(f"Imported {len(files)-len(errors)}/{len(files)} documents from {src_dir}")
     if errors:

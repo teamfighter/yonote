@@ -7,7 +7,6 @@ import re
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from urllib.parse import urljoin
 from typing import Any, Dict, List
 from urllib.error import HTTPError, URLError
 from urllib.request import HTTPRedirectHandler, Request, build_opener, urlopen
@@ -52,7 +51,17 @@ def _post_page(
     payload = dict(params or {})
     if offset is not None:
         payload.update({"limit": limit, "offset": offset})
-    url = urljoin(base, path)
+
+    if path.startswith("http://") or path.startswith("https://"):
+        url = path
+    elif path.startswith("/api/"):
+        root = base.split("/api")[0].rstrip("/")
+        url = f"{root}{path}"
+    elif path.startswith("/"):
+        url = f"{base.rstrip('/')}{path}"
+    else:
+        url = f"{base.rstrip('/')}/{path}"
+
     data = http_json("POST", url, token, payload)
     if not isinstance(data, dict):
         return {"data": [], "pagination": {"total": 0}}
@@ -89,7 +98,7 @@ def fetch_all_concurrent(
             results: List[dict] = items
             with ThreadPoolExecutor(max_workers=max(1, workers)) as ex:
                 while next_path:
-                    fut = ex.submit(_post_page, base, token, next_path, params, limit, None)
+                    fut = ex.submit(_post_page, base, token, next_path, None, limit, None)
                     data = fut.result()
                     page_items = data.get("data") or []
                     results.extend(page_items)
@@ -211,7 +220,7 @@ def export_document_content(base: str, token: str, doc_id: str) -> str:
                     return None
 
             opener = build_opener(_NoRedirect)
-            for _ in range(3):
+            for _ in range(6):
                 req = Request(url=url, method="POST", headers=headers, data=payload)
                 try:
                     resp = opener.open(req, timeout=60)
@@ -227,7 +236,7 @@ def export_document_content(base: str, token: str, doc_id: str) -> str:
                         err_body = e.read().decode("utf-8", errors="ignore")
                         print(f"[HTTP {e.code}] {err_body}", file=sys.stderr)
                         sys.exit(2)
-                time.sleep(0.5)
+                time.sleep(1)
             raise RuntimeError("export timed out")
 
     return ensure_text(data)

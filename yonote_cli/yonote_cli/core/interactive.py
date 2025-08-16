@@ -5,7 +5,11 @@ from __future__ import annotations
 from typing import Dict, List, Optional, Tuple
 import sys
 
-from .cache import list_collections, list_documents_in_collection
+from .cache import (
+    list_collections,
+    list_documents_in_collection,
+    refresh_document_branch,
+)
 
 try:
     from InquirerPy import inquirer
@@ -56,10 +60,17 @@ def interactive_select_documents(docs: List[dict], multiselect: bool = True) -> 
         prompt = inquirer.checkbox(
             message="Выберите документы (Space — выбрать, Enter — подтвердить):",
             choices=choices,
-            instruction="↑/↓, PgUp/PgDn, Search: /",
+            instruction="↑/↓, PgUp/PgDn, Space: выбрать, Ctrl+S поиск, Enter",
             transformer=lambda res: f"{len(res)} selected",
             height="90%",
             validate=lambda ans: (len(ans) > 0) or "Нужно выбрать хотя бы один документ",
+            keybindings={
+                "pageup": [{"key": "pageup"}],
+                "pagedown": [{"key": "pagedown"}],
+                "toggle": [{"key": "space"}],
+                "search": [{"key": "c-s"}],
+                "search-next": [{"key": "enter"}],
+            },
         )
         result = _execute(prompt)
         return list(result or [])
@@ -67,8 +78,12 @@ def interactive_select_documents(docs: List[dict], multiselect: bool = True) -> 
         prompt = inquirer.select(
             message="Выберите документ:",
             choices=choices,
-            instruction="↑/↓, Search: /",
+            instruction="↑/↓, Ctrl+S поиск, Enter",
             height="90%",
+            keybindings={
+                "search": [{"key": "c-s"}],
+                "search-next": [{"key": "enter"}],
+            },
         )
         result = _execute(prompt)
         return [result] if result else []
@@ -90,8 +105,12 @@ def interactive_pick_parent(docs: List[dict], allow_none: bool = True) -> Option
     prompt = inquirer.select(
         message="Куда импортировать (родительский документ)?",
         choices=choices,
-        instruction="↑/↓, Search: /",
+        instruction="↑/↓, Ctrl+S поиск, Enter",
         height="90%",
+        keybindings={
+            "search": [{"key": "c-s"}],
+            "search-next": [{"key": "enter"}],
+        },
     )
     parent = _execute(prompt)
     return parent
@@ -197,15 +216,15 @@ def interactive_browse_for_export(
                     message=path,
                     choices=choices,
                     default=default_val,
-                    instruction="↑/↓, PgUp/PgDn, Space: выбрать, Enter, / поиск",
+                    instruction="↑/↓, PgUp/PgDn, Space: выбрать, Ctrl+R обновить, Enter, Ctrl+S поиск",
                     height="90%",
                     keybindings={
                         "pageup": [{"key": "pageup"}],
                         "pagedown": [{"key": "pagedown"}],
                         "toggle-doc": [{"key": "space"}],
-                        "search": [{"key": "/"}],
+                        "refresh": [{"key": "c-r"}],
+                        "search": [{"key": "c-s"}],
                         "search-next": [{"key": "enter"}],
-                        "stop-search": [{"key": "c-s"}],
                     },
                 )
 
@@ -230,9 +249,29 @@ def interactive_browse_for_export(
                         toggle_descendants(did)
                     event.app.exit(result="__refresh__")
 
+                def _refresh(event) -> None:
+                    nonlocal docs, children
+                    search["default"] = prompt.content_control.selection["value"]
+                    docs = refresh_document_branch(
+                        base,
+                        token,
+                        coll_id,
+                        parent_id,
+                        workers=workers,
+                    )
+                    children = {}
+                    for d in docs:
+                        children.setdefault(d.get("parentDocumentId"), []).append(d)
+                    event.app.exit(result="__refresh__")
+
                 def _search(event) -> None:
                     search["default"] = prompt.content_control.selection["value"]
-                    event.app.exit(result="__search__")
+                    if search["query"]:
+                        search["query"] = None
+                        search["index"] = 0
+                        event.app.exit(result="__refresh__")
+                    else:
+                        event.app.exit(result="__search__")
 
                 def _next_or_submit(event) -> None:
                     if search["query"]:
@@ -243,20 +282,14 @@ def interactive_browse_for_export(
                         val = prompt.content_control.selection["value"]
                         event.app.exit(result=val)
 
-                def _stop_search(event) -> None:
-                    search["query"] = None
-                    search["index"] = 0
-                    search["default"] = prompt.content_control.selection["value"]
-                    event.app.exit(result="__refresh__")
-
                 prompt.kb_func_lookup.update(
                     {
                         "pageup": [{"func": _page_up}],
                         "pagedown": [{"func": _page_down}],
                         "toggle-doc": [{"func": _toggle_doc}],
+                        "refresh": [{"func": _refresh}],
                         "search": [{"func": _search}],
                         "search-next": [{"func": _next_or_submit}],
-                        "stop-search": [{"func": _stop_search}],
                     }
                 )
 
@@ -307,6 +340,7 @@ def interactive_browse_for_export(
 
         return browse(None, coll.get("name") or "(без названия)", None)
 
+    search: Dict[str, Optional[object]] = {"query": None, "index": 0, "default": None}
     while True:
         choices = [
             {
@@ -316,13 +350,101 @@ def interactive_browse_for_export(
             for c in collections
         ]
         choices.append({"name": "<Экспортировать выбранное>", "value": "__done"})
-        prompt = inquirer.select(
+        default_val = search.pop("default", None)
+        if search["query"]:
+            matches = [
+                c["value"]
+                for c in choices
+                if search["query"].lower() in c["name"].lower()
+            ]
+            if matches:
+                default_val = matches[search["index"] % len(matches)]
+        prompt = ListPrompt(
             message="Коллекции",
             choices=choices,
-            instruction="↑/↓, PgUp/PgDn, Enter",
+            default=default_val,
+            instruction="↑/↓, PgUp/PgDn, Ctrl+R обновить, Ctrl+S поиск, Enter",
             height="90%",
+            keybindings={
+                "pageup": [{"key": "pageup"}],
+                "pagedown": [{"key": "pagedown"}],
+                "refresh": [{"key": "c-r"}],
+                "search": [{"key": "c-s"}],
+                "search-next": [{"key": "enter"}],
+            },
         )
+
+        def _page(step: int) -> None:
+            cc = prompt.content_control
+            cc.selected_choice_index = max(
+                0, min(cc.choice_count - 1, cc.selected_choice_index + step)
+            )
+
+        def _page_up(event) -> None:
+            _page(-10)
+
+        def _page_down(event) -> None:
+            _page(10)
+
+        def _refresh(event) -> None:
+            nonlocal collections
+            search["default"] = prompt.content_control.selection["value"]
+            collections = list_collections(
+                base,
+                token,
+                use_cache=True,
+                refresh_cache=True,
+                workers=workers,
+            )
+            event.app.exit(result="__refresh__")
+
+        def _search(event) -> None:
+            search["default"] = prompt.content_control.selection["value"]
+            if search["query"]:
+                search["query"] = None
+                search["index"] = 0
+                event.app.exit(result="__refresh__")
+            else:
+                event.app.exit(result="__search__")
+
+        def _next_or_submit(event) -> None:
+            if search["query"]:
+                search["index"] += 1
+                search["default"] = prompt.content_control.selection["value"]
+                event.app.exit(result="__refresh__")
+            else:
+                val = prompt.content_control.selection["value"]
+                event.app.exit(result=val)
+
+        prompt.kb_func_lookup.update(
+            {
+                "pageup": [{"func": _page_up}],
+                "pagedown": [{"func": _page_down}],
+                "refresh": [{"func": _refresh}],
+                "search": [{"func": _search}],
+                "search-next": [{"func": _next_or_submit}],
+            }
+        )
+
         choice = _execute(prompt)
+        if choice == "__refresh__":
+            continue
+        if choice == "__search__":
+            q = _execute(
+                inquirer.text(message="Поиск:", default=search["query"] or "")
+            )
+            if q:
+                if q == search["query"]:
+                    search["index"] += 1
+                else:
+                    search["query"] = q
+                    search["index"] = 0
+            elif search["query"]:
+                search["index"] += 1
+            else:
+                search["query"] = None
+                search["index"] = 0
+            continue
         if choice == "__done":
             break
         typ, coll = choice
@@ -408,15 +530,15 @@ def interactive_pick_destination(
                     message=path,
                     choices=choices,
                     default=default_val,
-                    instruction="↑/↓, PgUp/PgDn, Space: выбрать, Enter, / поиск",
+                    instruction="↑/↓, PgUp/PgDn, Space: выбрать, Ctrl+R обновить, Enter, Ctrl+S поиск",
                     height="90%",
                     keybindings={
                         "pageup": [{"key": "pageup"}],
                         "pagedown": [{"key": "pagedown"}],
                         "choose": [{"key": "space"}],
-                        "search": [{"key": "/"}],
+                        "refresh": [{"key": "c-r"}],
+                        "search": [{"key": "c-s"}],
                         "search-next": [{"key": "enter"}],
-                        "stop-search": [{"key": "c-s"}],
                     },
                 )
 
@@ -437,9 +559,29 @@ def interactive_pick_destination(
                     search["default"] = prompt.content_control.selection["value"]
                     event.app.exit(result="__choose__")
 
+                def _refresh(event) -> None:
+                    nonlocal docs, children
+                    search["default"] = prompt.content_control.selection["value"]
+                    docs = refresh_document_branch(
+                        base,
+                        token,
+                        coll_id,
+                        parent_id,
+                        workers=workers,
+                    )
+                    children = {}
+                    for d in docs:
+                        children.setdefault(d.get("parentDocumentId"), []).append(d)
+                    event.app.exit(result="__refresh__")
+
                 def _search(event) -> None:
                     search["default"] = prompt.content_control.selection["value"]
-                    event.app.exit(result="__search__")
+                    if search["query"]:
+                        search["query"] = None
+                        search["index"] = 0
+                        event.app.exit(result="__refresh__")
+                    else:
+                        event.app.exit(result="__search__")
 
                 def _next_or_submit(event) -> None:
                     if search["query"]:
@@ -450,20 +592,14 @@ def interactive_pick_destination(
                         val = prompt.content_control.selection["value"]
                         event.app.exit(result=val)
 
-                def _stop_search(event) -> None:
-                    search["query"] = None
-                    search["index"] = 0
-                    search["default"] = prompt.content_control.selection["value"]
-                    event.app.exit(result="__refresh__")
-
                 prompt.kb_func_lookup.update(
                     {
                         "pageup": [{"func": _page_up}],
                         "pagedown": [{"func": _page_down}],
                         "choose": [{"func": _choose}],
+                        "refresh": [{"func": _refresh}],
                         "search": [{"func": _search}],
                         "search-next": [{"func": _next_or_submit}],
-                        "stop-search": [{"func": _stop_search}],
                     }
                 )
 
@@ -506,17 +642,107 @@ def interactive_pick_destination(
 
         return browse(None, coll.get("name") or "(без названия)")
 
+    search: Dict[str, Optional[object]] = {"query": None, "index": 0, "default": None}
     while True:
         choices = [
-            {"name": c.get("name") or "(без названия)", "value": c} for c in collections
+            {"name": c.get("name") or "(без названия)", "value": c}
+            for c in collections
         ]
-        prompt = inquirer.select(
+        default_val = search.pop("default", None)
+        if search["query"]:
+            matches = [
+                c["value"]
+                for c in choices
+                if search["query"].lower() in c["name"].lower()
+            ]
+            if matches:
+                default_val = matches[search["index"] % len(matches)]
+        prompt = ListPrompt(
             message="Коллекции",
             choices=choices,
-            instruction="↑/↓, PgUp/PgDn, Enter",
+            default=default_val,
+            instruction="↑/↓, PgUp/PgDn, Ctrl+R обновить, Ctrl+S поиск, Enter",
             height="90%",
+            keybindings={
+                "pageup": [{"key": "pageup"}],
+                "pagedown": [{"key": "pagedown"}],
+                "refresh": [{"key": "c-r"}],
+                "search": [{"key": "c-s"}],
+                "search-next": [{"key": "enter"}],
+            },
         )
+
+        def _page(step: int) -> None:
+            cc = prompt.content_control
+            cc.selected_choice_index = max(
+                0, min(cc.choice_count - 1, cc.selected_choice_index + step)
+            )
+
+        def _page_up(event) -> None:
+            _page(-10)
+
+        def _page_down(event) -> None:
+            _page(10)
+
+        def _refresh(event) -> None:
+            nonlocal collections
+            search["default"] = prompt.content_control.selection["value"]
+            collections = list_collections(
+                base,
+                token,
+                use_cache=True,
+                refresh_cache=True,
+                workers=workers,
+            )
+            event.app.exit(result="__refresh__")
+
+        def _search(event) -> None:
+            search["default"] = prompt.content_control.selection["value"]
+            if search["query"]:
+                search["query"] = None
+                search["index"] = 0
+                event.app.exit(result="__refresh__")
+            else:
+                event.app.exit(result="__search__")
+
+        def _next_or_submit(event) -> None:
+            if search["query"]:
+                search["index"] += 1
+                search["default"] = prompt.content_control.selection["value"]
+                event.app.exit(result="__refresh__")
+            else:
+                val = prompt.content_control.selection["value"]
+                event.app.exit(result=val)
+
+        prompt.kb_func_lookup.update(
+            {
+                "pageup": [{"func": _page_up}],
+                "pagedown": [{"func": _page_down}],
+                "refresh": [{"func": _refresh}],
+                "search": [{"func": _search}],
+                "search-next": [{"func": _next_or_submit}],
+            }
+        )
+
         coll = _execute(prompt)
+        if coll == "__refresh__":
+            continue
+        if coll == "__search__":
+            q = _execute(
+                inquirer.text(message="Поиск:", default=search["query"] or "")
+            )
+            if q:
+                if q == search["query"]:
+                    search["index"] += 1
+                else:
+                    search["query"] = q
+                    search["index"] = 0
+            elif search["query"]:
+                search["index"] += 1
+            else:
+                search["query"] = None
+                search["index"] = 0
+            continue
         if not coll:
             continue
         res = browse_collection(coll)
