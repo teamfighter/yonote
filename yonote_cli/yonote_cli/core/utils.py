@@ -51,7 +51,17 @@ def _post_page(
     payload = dict(params or {})
     if offset is not None:
         payload.update({"limit": limit, "offset": offset})
-    url = f"{base.rstrip('/')}/{path.lstrip('/')}"
+
+    if path.startswith("http://") or path.startswith("https://"):
+        url = path
+    elif path.startswith("/api/"):
+        root = base.split("/api")[0].rstrip("/")
+        url = f"{root}{path}"
+    elif path.startswith("/"):
+        url = f"{base.rstrip('/')}{path}"
+    else:
+        url = f"{base.rstrip('/')}/{path}"
+
     data = http_json("POST", url, token, payload)
     if not isinstance(data, dict):
         return {"data": [], "pagination": {"total": 0}}
@@ -88,7 +98,7 @@ def fetch_all_concurrent(
             results: List[dict] = items
             with ThreadPoolExecutor(max_workers=max(1, workers)) as ex:
                 while next_path:
-                    fut = ex.submit(_post_page, base, token, next_path, params, limit, None)
+                    fut = ex.submit(_post_page, base, token, next_path, None, limit, None)
                     data = fut.result()
                     page_items = data.get("data") or []
                     results.extend(page_items)
