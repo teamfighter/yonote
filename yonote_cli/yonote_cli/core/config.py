@@ -41,9 +41,16 @@ def save_config(base_url: str | None, token: str | None) -> None:
 
 
 def get_base_and_token() -> Tuple[str, str]:
-    """Return API base URL and token or exit if missing."""
+    """Return API base URL and token or exit if missing.
+
+    ``base_url`` in config may omit the trailing ``/api`` segment which the
+    Yonote API expects. Normalize it here so network helpers always receive a
+    base URL that already includes ``/api``.
+    """
     cfg = load_config()
     base = cfg.get("base_url") or DEFAULT_BASE
+    if not base.rstrip("/").endswith("/api"):
+        base = base.rstrip("/") + "/api"
     token = cfg.get("token")
     if not token:
         print("Missing token. Run: yonote auth set --token <JWT>", file=sys.stderr)
