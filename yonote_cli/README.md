@@ -1,1 +1,3 @@
-# yonote-cli — Самодостаточный CLI для Yonote
+# yonote-tools — CLI для Yonote
+
+Этот пакет содержит утилиту `yonote`. Основное описание, примеры и инструкции находятся в [корневом README](../README.md).
