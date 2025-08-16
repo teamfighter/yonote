@@ -56,10 +56,17 @@ def interactive_select_documents(docs: List[dict], multiselect: bool = True) -> 
         prompt = inquirer.checkbox(
             message="Выберите документы (Space — выбрать, Enter — подтвердить):",
             choices=choices,
-            instruction="↑/↓, PgUp/PgDn, Search: /",
+            instruction="↑/↓, PgUp/PgDn, Space: выбрать, Ctrl+S поиск, Enter",
             transformer=lambda res: f"{len(res)} selected",
             height="90%",
             validate=lambda ans: (len(ans) > 0) or "Нужно выбрать хотя бы один документ",
+            keybindings={
+                "pageup": [{"key": "pageup"}],
+                "pagedown": [{"key": "pagedown"}],
+                "toggle": [{"key": "space"}],
+                "search": [{"key": "c-s"}],
+                "search-next": [{"key": "enter"}],
+            },
         )
         result = _execute(prompt)
         return list(result or [])
@@ -67,8 +74,12 @@ def interactive_select_documents(docs: List[dict], multiselect: bool = True) -> 
         prompt = inquirer.select(
             message="Выберите документ:",
             choices=choices,
-            instruction="↑/↓, Search: /",
+            instruction="↑/↓, Ctrl+S поиск, Enter",
             height="90%",
+            keybindings={
+                "search": [{"key": "c-s"}],
+                "search-next": [{"key": "enter"}],
+            },
         )
         result = _execute(prompt)
         return [result] if result else []
@@ -90,8 +101,12 @@ def interactive_pick_parent(docs: List[dict], allow_none: bool = True) -> Option
     prompt = inquirer.select(
         message="Куда импортировать (родительский документ)?",
         choices=choices,
-        instruction="↑/↓, Search: /",
+        instruction="↑/↓, Ctrl+S поиск, Enter",
         height="90%",
+        keybindings={
+            "search": [{"key": "c-s"}],
+            "search-next": [{"key": "enter"}],
+        },
     )
     parent = _execute(prompt)
     return parent
