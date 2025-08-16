@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any, Dict, List
 
-from .config import CACHE_PATH
+from .config import CACHE_PATH, API_MAX_LIMIT
 from .utils import fetch_all_concurrent
 
 

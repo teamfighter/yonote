@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Dict, List, Tuple
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from ..core import (
     get_base_and_token,
@@ -114,13 +115,16 @@ def cmd_export(args):
     errors: List[Tuple[str, str]] = []
     written = 0
     with tqdm(total=total, unit="doc", desc="Exporting") as bar:
-        for doc_id in all_ids:
-            path, err = export_one(doc_id)
-            if err:
-                errors.append((doc_id, err))
-            else:
-                written += 1
-            bar.update(1)
+        with ThreadPoolExecutor(max_workers=max(1, args.workers)) as ex:
+            futures = {ex.submit(export_one, did): did for did in all_ids}
+            for fut in as_completed(futures):
+                doc_id = futures[fut]
+                path, err = fut.result()
+                if err:
+                    errors.append((doc_id, err))
+                else:
+                    written += 1
+                bar.update(1)
 
     print(f"Exported {written}/{total} documents to {out_dir}")
     if errors:
