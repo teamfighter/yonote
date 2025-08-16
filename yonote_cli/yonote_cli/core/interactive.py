@@ -5,7 +5,11 @@ from __future__ import annotations
 from typing import Dict, List, Optional, Tuple
 import sys
 
-from .cache import list_collections, list_documents_in_collection
+from .cache import (
+    list_collections,
+    list_documents_in_collection,
+    refresh_document_branch,
+)
 
 try:
     from InquirerPy import inquirer
@@ -212,12 +216,13 @@ def interactive_browse_for_export(
                     message=path,
                     choices=choices,
                     default=default_val,
-                    instruction="↑/↓, PgUp/PgDn, Space: выбрать, Enter, Ctrl+S поиск",
+                    instruction="↑/↓, PgUp/PgDn, Space: выбрать, Ctrl+R обновить, Enter, Ctrl+S поиск",
                     height="90%",
                     keybindings={
                         "pageup": [{"key": "pageup"}],
                         "pagedown": [{"key": "pagedown"}],
                         "toggle-doc": [{"key": "space"}],
+                        "refresh": [{"key": "c-r"}],
                         "search": [{"key": "c-s"}],
                         "search-next": [{"key": "enter"}],
                     },
@@ -244,6 +249,21 @@ def interactive_browse_for_export(
                         toggle_descendants(did)
                     event.app.exit(result="__refresh__")
 
+                def _refresh(event) -> None:
+                    nonlocal docs, children
+                    search["default"] = prompt.content_control.selection["value"]
+                    docs = refresh_document_branch(
+                        base,
+                        token,
+                        coll_id,
+                        parent_id,
+                        workers=workers,
+                    )
+                    children = {}
+                    for d in docs:
+                        children.setdefault(d.get("parentDocumentId"), []).append(d)
+                    event.app.exit(result="__refresh__")
+
                 def _search(event) -> None:
                     search["default"] = prompt.content_control.selection["value"]
                     if search["query"]:
@@ -267,6 +287,7 @@ def interactive_browse_for_export(
                         "pageup": [{"func": _page_up}],
                         "pagedown": [{"func": _page_down}],
                         "toggle-doc": [{"func": _toggle_doc}],
+                        "refresh": [{"func": _refresh}],
                         "search": [{"func": _search}],
                         "search-next": [{"func": _next_or_submit}],
                     }
@@ -342,11 +363,12 @@ def interactive_browse_for_export(
             message="Коллекции",
             choices=choices,
             default=default_val,
-            instruction="↑/↓, PgUp/PgDn, Ctrl+S поиск, Enter",
+            instruction="↑/↓, PgUp/PgDn, Ctrl+R обновить, Ctrl+S поиск, Enter",
             height="90%",
             keybindings={
                 "pageup": [{"key": "pageup"}],
                 "pagedown": [{"key": "pagedown"}],
+                "refresh": [{"key": "c-r"}],
                 "search": [{"key": "c-s"}],
                 "search-next": [{"key": "enter"}],
             },
@@ -363,6 +385,18 @@ def interactive_browse_for_export(
 
         def _page_down(event) -> None:
             _page(10)
+
+        def _refresh(event) -> None:
+            nonlocal collections
+            search["default"] = prompt.content_control.selection["value"]
+            collections = list_collections(
+                base,
+                token,
+                use_cache=True,
+                refresh_cache=True,
+                workers=workers,
+            )
+            event.app.exit(result="__refresh__")
 
         def _search(event) -> None:
             search["default"] = prompt.content_control.selection["value"]
@@ -386,6 +420,7 @@ def interactive_browse_for_export(
             {
                 "pageup": [{"func": _page_up}],
                 "pagedown": [{"func": _page_down}],
+                "refresh": [{"func": _refresh}],
                 "search": [{"func": _search}],
                 "search-next": [{"func": _next_or_submit}],
             }
@@ -495,12 +530,13 @@ def interactive_pick_destination(
                     message=path,
                     choices=choices,
                     default=default_val,
-                    instruction="↑/↓, PgUp/PgDn, Space: выбрать, Enter, Ctrl+S поиск",
+                    instruction="↑/↓, PgUp/PgDn, Space: выбрать, Ctrl+R обновить, Enter, Ctrl+S поиск",
                     height="90%",
                     keybindings={
                         "pageup": [{"key": "pageup"}],
                         "pagedown": [{"key": "pagedown"}],
                         "choose": [{"key": "space"}],
+                        "refresh": [{"key": "c-r"}],
                         "search": [{"key": "c-s"}],
                         "search-next": [{"key": "enter"}],
                     },
@@ -522,6 +558,21 @@ def interactive_pick_destination(
                 def _choose(event) -> None:
                     search["default"] = prompt.content_control.selection["value"]
                     event.app.exit(result="__choose__")
+
+                def _refresh(event) -> None:
+                    nonlocal docs, children
+                    search["default"] = prompt.content_control.selection["value"]
+                    docs = refresh_document_branch(
+                        base,
+                        token,
+                        coll_id,
+                        parent_id,
+                        workers=workers,
+                    )
+                    children = {}
+                    for d in docs:
+                        children.setdefault(d.get("parentDocumentId"), []).append(d)
+                    event.app.exit(result="__refresh__")
 
                 def _search(event) -> None:
                     search["default"] = prompt.content_control.selection["value"]
@@ -546,6 +597,7 @@ def interactive_pick_destination(
                         "pageup": [{"func": _page_up}],
                         "pagedown": [{"func": _page_down}],
                         "choose": [{"func": _choose}],
+                        "refresh": [{"func": _refresh}],
                         "search": [{"func": _search}],
                         "search-next": [{"func": _next_or_submit}],
                     }
@@ -609,11 +661,12 @@ def interactive_pick_destination(
             message="Коллекции",
             choices=choices,
             default=default_val,
-            instruction="↑/↓, PgUp/PgDn, Ctrl+S поиск, Enter",
+            instruction="↑/↓, PgUp/PgDn, Ctrl+R обновить, Ctrl+S поиск, Enter",
             height="90%",
             keybindings={
                 "pageup": [{"key": "pageup"}],
                 "pagedown": [{"key": "pagedown"}],
+                "refresh": [{"key": "c-r"}],
                 "search": [{"key": "c-s"}],
                 "search-next": [{"key": "enter"}],
             },
@@ -630,6 +683,18 @@ def interactive_pick_destination(
 
         def _page_down(event) -> None:
             _page(10)
+
+        def _refresh(event) -> None:
+            nonlocal collections
+            search["default"] = prompt.content_control.selection["value"]
+            collections = list_collections(
+                base,
+                token,
+                use_cache=True,
+                refresh_cache=True,
+                workers=workers,
+            )
+            event.app.exit(result="__refresh__")
 
         def _search(event) -> None:
             search["default"] = prompt.content_control.selection["value"]
@@ -653,6 +718,7 @@ def interactive_pick_destination(
             {
                 "pageup": [{"func": _page_up}],
                 "pagedown": [{"func": _page_down}],
+                "refresh": [{"func": _refresh}],
                 "search": [{"func": _search}],
                 "search-next": [{"func": _next_or_submit}],
             }
