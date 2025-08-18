@@ -19,6 +19,8 @@ try:  # pragma: no cover - exercised indirectly in tests
         cache_clear,
         cmd_export,
         cmd_import,
+        cmd_diag_collections,
+        cmd_diag_documents,
     )
 except ModuleNotFoundError:  # pragma: no cover
     if __package__ in (None, ""):
@@ -32,6 +34,8 @@ except ModuleNotFoundError:  # pragma: no cover
         cache_clear,
         cmd_export,
         cmd_import,
+        cmd_diag_collections,
+        cmd_diag_documents,
     )
 
 
@@ -58,6 +62,19 @@ def main(argv=None):
     p_cache_info.set_defaults(func=cache_info)
     p_cache_clear = sub_cache.add_parser("clear", help="Delete cache file")
     p_cache_clear.set_defaults(func=cache_clear)
+
+    # diagnostic
+    p_diag = sub.add_parser("diag", help="Diagnostic API calls")
+    sub_diag = p_diag.add_subparsers(dest="diag_cmd")
+
+    p_diag_cols = sub_diag.add_parser("collections", help="List collections")
+    p_diag_cols.add_argument("--workers", type=int, default=4, help="Parallel workers")
+    p_diag_cols.set_defaults(func=cmd_diag_collections)
+
+    p_diag_docs = sub_diag.add_parser("documents", help="List documents in a collection")
+    p_diag_docs.add_argument("--collection-id", required=True, help="Collection ID")
+    p_diag_docs.add_argument("--workers", type=int, default=4, help="Parallel workers")
+    p_diag_docs.set_defaults(func=cmd_diag_documents)
 
     # unified export
     p_exp = sub.add_parser("export", help="Interactive export of documents/collections")
@@ -103,6 +120,9 @@ def main(argv=None):
         return 0
     if args.cmd == "cache" and not getattr(args, "cache_cmd", None):
         p_cache.print_help()
+        return 0
+    if args.cmd == "diag" and not getattr(args, "diag_cmd", None):
+        p_diag.print_help()
         return 0
     return args.func(args)
 
