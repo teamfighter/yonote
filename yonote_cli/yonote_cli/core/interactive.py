@@ -130,7 +130,7 @@ def interactive_browse_for_export(
             file=sys.stderr,
         )
         sys.exit(2)
-
+    print("Загрузка списка коллекций...", file=sys.stderr)
     collections = list_collections(
         base, token, use_cache=True, refresh_cache=refresh_cache, workers=workers
     )

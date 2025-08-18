@@ -33,7 +33,7 @@ jobs:
       - name: Build executable (Linux)
         if: matrix.os == 'ubuntu-latest'
         run: |
-          docker run --rm -u $(id -u):$(id -g) -v "$PWD":/src -w /src python:3.11-slim-bullseye \
+          docker run --rm -v "$PWD":/src -w /src python:3.11-slim-bullseye \
             bash -c "pip install -r requirements.txt && \
                      pyinstaller yonote_cli/yonote_cli/__main__.py --name yonote --onefile --collect-all InquirerPy"
           mkdir release
