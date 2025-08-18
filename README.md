@@ -86,3 +86,29 @@ yonote export --out-dir ./dump --format md --workers 8
 yonote import --src-dir ./dump
 ```
 
+## Сборка и релизы
+
+Список зависимостей находится в файле `requirements.txt`. Готовые бинарники для Linux, macOS и Windows, а также Docker-образ публикуются автоматически при создании релиза на GitHub.
+
+### Локальная сборка бинарника
+
+```bash
+pip install -r requirements.txt
+pip install pyinstaller
+pyinstaller yonote_cli/yonote_cli/__main__.py --name yonote --onefile
+```
+
+Готовый исполняемый файл появится в каталоге `dist/`.
+
+### Локальная сборка Docker-образа
+
+```bash
+docker build -f docker/Dockerfile -t yonote:latest .
+```
+
+Образ из релизов доступен в GitHub Container Registry:
+
+```bash
+docker pull ghcr.io/<owner>/yonote:<tag>
+```
+
