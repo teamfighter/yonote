@@ -29,6 +29,8 @@ jobs:
         run: |
           pip install -r requirements.txt
           pip install pyinstaller
+      - name: Run tests
+        run: pytest
       - name: Build executable
         run: |
           pyinstaller yonote_cli/yonote_cli/__main__.py --name yonote --onefile
