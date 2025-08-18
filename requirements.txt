@@ -1,3 +1,4 @@
 requests
+InquirerPy
 pyinstaller
 pytest
