@@ -32,7 +32,7 @@ yonote auth set --base-url https://example.yonote.ru --token <JWT>
 ## Экспорт
 
 ```bash
-yonote export --out-dir ./dump --workers 12 --format md
+yonote export --out-dir ./dump --workers 4 --format md
 ```
 
 Команда откроет встроенный браузер для выбора коллекций и документов. Выбранные элементы выгружаются в указанную директорию с сохранением иерархии. Полезные флаги:
@@ -80,7 +80,7 @@ yonote cache clear  # очистить кэш
 ### Экспорт коллекции в Markdown
 
 ```bash
-yonote export --out-dir ./dump --format md --workers 8
+yonote export --out-dir ./dump --format md --workers 4
 ```
 
 ### Импорт подготовленных файлов
@@ -98,7 +98,8 @@ yonote import --src-dir ./dump
 Чтобы готовый исполняемый файл работал на системах с более старой `glibc`,
 сборку необходимо выполнять в окружении Debian Bullseye с Python 3.11. Для
 упрощения добавлена цель `make build`, которая запускает PyInstaller внутри
-Docker-контейнера с подходящей версией `glibc`.
+Docker-контейнера с подходящей версией `glibc` и устанавливает пакет `binutils`
+для доступности `objdump`.
 
 ```bash
 make build
