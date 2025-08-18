@@ -80,31 +80,33 @@ def fetch_all_concurrent(
     workers: int = 8,
     desc: str = "Loading",
 ) -> List[dict]:
-    """Fetch all pages concurrently until a short page is received."""
+    """Fetch all pages until a short page is received.
+
+    When the API response includes ``pagination.nextPath`` each subsequent
+    page is requested sequentially using that path.  Otherwise the function
+    falls back to concurrent offset-based pagination using multiple workers.
+    """
     limit = min(limit, API_MAX_LIMIT)
     params = dict(params or {})
 
     first = _post_page(base, token, path, params, limit, 0)
     items = list(first.get("data") or [])
-    n_first = len(items)
 
     with tqdm(total=None, unit="pg", desc=desc) as bar:
         bar.update(1)
         pagination = first.get("pagination") or {}
         next_path = pagination.get("nextPath")
 
-        # Sequential path-based pagination when server provides nextPath
+        # Follow server-provided nextPath links sequentially
         if next_path:
             results: List[dict] = items
-            with ThreadPoolExecutor(max_workers=max(1, workers)) as ex:
-                while next_path:
-                    fut = ex.submit(_post_page, base, token, next_path, None, limit, None)
-                    data = fut.result()
-                    page_items = data.get("data") or []
-                    results.extend(page_items)
-                    bar.update(1)
-                    pagination = data.get("pagination") or {}
-                    next_path = pagination.get("nextPath")
+            while next_path:
+                data = _post_page(base, token, next_path, None, limit, None)
+                page_items = data.get("data") or []
+                results.extend(page_items)
+                bar.update(1)
+                pagination = data.get("pagination") or {}
+                next_path = pagination.get("nextPath")
             return results
 
         # Fallback to offset-based concurrent fetching
