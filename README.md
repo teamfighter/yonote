@@ -7,39 +7,39 @@
 
 ## Запуск в Docker
 
-Образ публикуется в [GitHub Container Registry](https://github.com/orgs/teamfighter/packages).
-
-Задайте переменную окружения с тегом нужной версии:
+Образ публикуется в [GitHub Container Registry](https://github.com/orgs/teamfighter/packages). Для работы с CLI достаточно
+загрузить образ и подключить shell‑обёртку:
 
 ```bash
 export YONOTE_VERSION=<latest tag>
-```
-
-```bash
 docker pull ghcr.io/teamfighter/yonote:$YONOTE_VERSION
+curl -O https://raw.githubusercontent.com/teamfighter/yonote/main/yonote.sh
+chmod +x yonote.sh
+source yonote.sh
+yonote --help
 ```
 
-Для сохранения конфигурации и кэша смонтируйте файлы в домашний каталог контейнера и прокиньте рабочую директорию:
+Обёртка монтирует файлы `~/.yonote.json` и `~/.yonote-cache.json`, а также текущую директорию в `/app/work`, что позволяет
+использовать относительные пути. Далее во всех примерах предполагается, что функция `yonote` уже доступна.
+
+## Запуск через Python venv
+
+Альтернативно CLI можно установить в локальное виртуальное окружение Python:
 
 ```bash
-docker run --rm -it \
-  -v "$HOME/.yonote.json:/root/.yonote.json" \
-  -v "$HOME/.yonote-cache.json:/root/.yonote-cache.json" \
-  -v "$(pwd):/data" \
-  ghcr.io/teamfighter/yonote:$YONOTE_VERSION --help
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+pip install -e yonote_cli
+yonote --help
 ```
-
-В примерах далее `ghcr.io/teamfighter/yonote:$YONOTE_VERSION` следует запускать аналогичным образом.
 
 ## Настройка доступа
 
 Получите JWT‑токен в интерфейсе Yonote и сохраните параметры подключения:
 
 ```bash
-docker run --rm -it \
-  -v "$HOME/.yonote.json:/root/.yonote.json" \
-  -v "$HOME/.yonote-cache.json:/root/.yonote-cache.json" \
-  ghcr.io/teamfighter/yonote:$YONOTE_VERSION auth set --base-url https://example.yonote.ru --token <JWT>
+yonote auth set --base-url https://example.yonote.ru --token <JWT>
 ```
 
 Конфигурация хранится в `~/.yonote.json`, а кэш структуры документов — в `~/.yonote-cache.json`.
@@ -47,11 +47,7 @@ docker run --rm -it \
 ## Экспорт
 
 ```bash
-docker run --rm -it \
-  -v "$HOME/.yonote.json:/root/.yonote.json" \
-  -v "$HOME/.yonote-cache.json:/root/.yonote-cache.json" \
-  -v "$(pwd)/dump:/data" \
-  ghcr.io/teamfighter/yonote:$YONOTE_VERSION export --out-dir /data --workers 4 --format md
+yonote export --out-dir ./dump --workers 4 --format md
 ```
 
 Команда откроет встроенный браузер для выбора коллекций и документов. Выбранные элементы выгружаются в указанную директорию с сохранением иерархии. Полезные флаги:
@@ -63,11 +59,7 @@ docker run --rm -it \
 ## Импорт
 
 ```bash
-docker run --rm -it \
-  -v "$HOME/.yonote.json:/root/.yonote.json" \
-  -v "$HOME/.yonote-cache.json:/root/.yonote-cache.json" \
-  -v "$(pwd)/dump:/data" \
-  ghcr.io/teamfighter/yonote:$YONOTE_VERSION import --src-dir /data
+yonote import --src-dir ./dump
 ```
 
 CLI предложит выбрать коллекцию и родительский документ, затем воспроизведёт локальную структуру каталогов в Yonote и опубликует созданные документы. Опции:
@@ -92,14 +84,8 @@ CLI предложит выбрать коллекцию и родительск
 Метаданные коллекций и документов сохраняются в `~/.yonote-cache.json`. Управлять кэшем можно командами:
 
 ```bash
-docker run --rm -it \
-  -v "$HOME/.yonote.json:/root/.yonote.json" \
-  -v "$HOME/.yonote-cache.json:/root/.yonote-cache.json" \
-  ghcr.io/teamfighter/yonote:$YONOTE_VERSION cache info   # показать информацию о кэше
-docker run --rm -it \
-  -v "$HOME/.yonote.json:/root/.yonote.json" \
-  -v "$HOME/.yonote-cache.json:/root/.yonote-cache.json" \
-  ghcr.io/teamfighter/yonote:$YONOTE_VERSION cache clear  # очистить кэш
+yonote cache info   # показать информацию о кэше
+yonote cache clear  # очистить кэш
 ```
 
 Флаг `--refresh-cache` или сочетание `Ctrl+R` позволяют обновлять только нужные ветки дерева, сокращая время запросов.
@@ -109,33 +95,20 @@ docker run --rm -it \
 ### Экспорт коллекции в Markdown
 
 ```bash
-docker run --rm -it \
-  -v "$HOME/.yonote.json:/root/.yonote.json" \
-  -v "$HOME/.yonote-cache.json:/root/.yonote-cache.json" \
-  -v "$(pwd)/dump:/data" \
-  ghcr.io/teamfighter/yonote:$YONOTE_VERSION export --out-dir /data --format md --workers 4
+yonote export --out-dir ./dump --format md --workers 4
 ```
 
 ### Импорт подготовленных файлов
 
 ```bash
-docker run --rm -it \
-  -v "$HOME/.yonote.json:/root/.yonote.json" \
-  -v "$HOME/.yonote-cache.json:/root/.yonote-cache.json" \
-  -v "$(pwd)/dump:/data" \
-  ghcr.io/teamfighter/yonote:$YONOTE_VERSION import --src-dir /data
+yonote import --src-dir ./dump
 ```
 
 Команда для загрузки образа с конкретной версией публикуется в релизных заметках.
 
 ## Локальная разработка
 
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-pip install -e yonote_cli
-```
+Следуйте инструкции из раздела [«Запуск через Python venv»](#запуск-через-python-venv), затем запустите тесты и при необходимости соберите образ.
 
 ### Запуск тестов
 
@@ -148,4 +121,3 @@ pytest
 ```bash
 docker build -f docker/Dockerfile -t yonote:dev .
 ```
-
