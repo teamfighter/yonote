@@ -9,8 +9,14 @@
 
 Образ публикуется в [GitHub Container Registry](https://github.com/orgs/teamfighter/packages).
 
+Задайте переменную окружения с тегом нужной версии:
+
 ```bash
-docker pull ghcr.io/teamfighter/yonote:<tag>
+export YONOTE_VERSION=<latest tag>
+```
+
+```bash
+docker pull ghcr.io/teamfighter/yonote:$YONOTE_VERSION
 ```
 
 Для сохранения конфигурации и кэша смонтируйте файлы в домашний каталог контейнера и прокиньте рабочую директорию:
@@ -20,10 +26,10 @@ docker run --rm -it \
   -v "$HOME/.yonote.json:/root/.yonote.json" \
   -v "$HOME/.yonote-cache.json:/root/.yonote-cache.json" \
   -v "$(pwd):/data" \
-  ghcr.io/teamfighter/yonote:<tag> --help
+  ghcr.io/teamfighter/yonote:$YONOTE_VERSION --help
 ```
 
-В примерах далее `ghcr.io/teamfighter/yonote:<tag>` следует запускать аналогичным образом.
+В примерах далее `ghcr.io/teamfighter/yonote:$YONOTE_VERSION` следует запускать аналогичным образом.
 
 ## Настройка доступа
 
@@ -33,7 +39,7 @@ docker run --rm -it \
 docker run --rm -it \
   -v "$HOME/.yonote.json:/root/.yonote.json" \
   -v "$HOME/.yonote-cache.json:/root/.yonote-cache.json" \
-  ghcr.io/teamfighter/yonote:<tag> auth set --base-url https://example.yonote.ru --token <JWT>
+  ghcr.io/teamfighter/yonote:$YONOTE_VERSION auth set --base-url https://example.yonote.ru --token <JWT>
 ```
 
 Конфигурация хранится в `~/.yonote.json`, а кэш структуры документов — в `~/.yonote-cache.json`.
@@ -45,7 +51,7 @@ docker run --rm -it \
   -v "$HOME/.yonote.json:/root/.yonote.json" \
   -v "$HOME/.yonote-cache.json:/root/.yonote-cache.json" \
   -v "$(pwd)/dump:/data" \
-  ghcr.io/teamfighter/yonote:<tag> export --out-dir /data --workers 4 --format md
+  ghcr.io/teamfighter/yonote:$YONOTE_VERSION export --out-dir /data --workers 4 --format md
 ```
 
 Команда откроет встроенный браузер для выбора коллекций и документов. Выбранные элементы выгружаются в указанную директорию с сохранением иерархии. Полезные флаги:
@@ -61,7 +67,7 @@ docker run --rm -it \
   -v "$HOME/.yonote.json:/root/.yonote.json" \
   -v "$HOME/.yonote-cache.json:/root/.yonote-cache.json" \
   -v "$(pwd)/dump:/data" \
-  ghcr.io/teamfighter/yonote:<tag> import --src-dir /data
+  ghcr.io/teamfighter/yonote:$YONOTE_VERSION import --src-dir /data
 ```
 
 CLI предложит выбрать коллекцию и родительский документ, затем воспроизведёт локальную структуру каталогов в Yonote и опубликует созданные документы. Опции:
@@ -71,7 +77,7 @@ CLI предложит выбрать коллекцию и родительск
 
 ## Встроенный браузер
 
-Интерактивные диалоги экспорта и импорта используют встроенный браузер. Библиотека [InquirerPy](https://github.com/kazhala/InquirerPy), на которой он основан, уже включена в Docker‑образ, поэтому дополнительная установка не требуется. Доступные клавиши:
+Интерактивные диалоги экспорта и импорта используют встроенный браузер. Библиотека [InquirerPy](https://github.com/kazhala/InquirerPy), на которой он основан, включена в образ последних версий. Если при запуске появляется сообщение `Interactive mode requires InquirerPy`, обновите `YONOTE_VERSION` до актуального тега. Доступные клавиши:
 
 - `↑`/`↓` — перемещение по списку;
 - `PgUp`/`PgDn` — пролистывание по 10 элементов;
@@ -89,11 +95,11 @@ CLI предложит выбрать коллекцию и родительск
 docker run --rm -it \
   -v "$HOME/.yonote.json:/root/.yonote.json" \
   -v "$HOME/.yonote-cache.json:/root/.yonote-cache.json" \
-  ghcr.io/teamfighter/yonote:<tag> cache info   # показать информацию о кэше
+  ghcr.io/teamfighter/yonote:$YONOTE_VERSION cache info   # показать информацию о кэше
 docker run --rm -it \
   -v "$HOME/.yonote.json:/root/.yonote.json" \
   -v "$HOME/.yonote-cache.json:/root/.yonote-cache.json" \
-  ghcr.io/teamfighter/yonote:<tag> cache clear  # очистить кэш
+  ghcr.io/teamfighter/yonote:$YONOTE_VERSION cache clear  # очистить кэш
 ```
 
 Флаг `--refresh-cache` или сочетание `Ctrl+R` позволяют обновлять только нужные ветки дерева, сокращая время запросов.
@@ -107,7 +113,7 @@ docker run --rm -it \
   -v "$HOME/.yonote.json:/root/.yonote.json" \
   -v "$HOME/.yonote-cache.json:/root/.yonote-cache.json" \
   -v "$(pwd)/dump:/data" \
-  ghcr.io/teamfighter/yonote:<tag> export --out-dir /data --format md --workers 4
+  ghcr.io/teamfighter/yonote:$YONOTE_VERSION export --out-dir /data --format md --workers 4
 ```
 
 ### Импорт подготовленных файлов
@@ -117,7 +123,7 @@ docker run --rm -it \
   -v "$HOME/.yonote.json:/root/.yonote.json" \
   -v "$HOME/.yonote-cache.json:/root/.yonote-cache.json" \
   -v "$(pwd)/dump:/data" \
-  ghcr.io/teamfighter/yonote:<tag> import --src-dir /data
+  ghcr.io/teamfighter/yonote:$YONOTE_VERSION import --src-dir /data
 ```
 
 Команда для загрузки образа с конкретной версией публикуется в релизных заметках.

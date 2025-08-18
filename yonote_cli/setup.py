@@ -6,7 +6,7 @@ setup(
     description="Self-contained CLI for Yonote (import/export)",
     packages=find_packages(),
     include_package_data=True,
-    install_requires=["requests"],
+    install_requires=["requests", "InquirerPy"],
     entry_points={
         "console_scripts": [
             "yonote=yonote_cli.__main__:main",
