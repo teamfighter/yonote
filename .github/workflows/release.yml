@@ -24,16 +24,25 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v4
         with:
-          python-version: '3.12'
+          python-version: '3.11'
       - name: Install dependencies
         run: |
           pip install -r requirements.txt
-          pip install pyinstaller
       - name: Run tests
         run: pytest
-      - name: Build executable
+      - name: Build executable (Linux)
+        if: matrix.os == 'ubuntu-latest'
         run: |
-          pyinstaller yonote_cli/yonote_cli/__main__.py --name yonote --onefile
+          docker run --rm -v "$PWD":/src -w /src python:3.11-slim-bullseye \
+            bash -c "pip install -r requirements.txt && \
+                     pyinstaller yonote_cli/yonote_cli/__main__.py --name yonote --onefile --collect-all InquirerPy"
+          mkdir release
+          mv dist/yonote release/${{ matrix.artifact }}
+        shell: bash
+      - name: Build executable (macOS/Windows)
+        if: matrix.os != 'ubuntu-latest'
+        run: |
+          pyinstaller yonote_cli/yonote_cli/__main__.py --name yonote --onefile --collect-all InquirerPy
           mkdir release
           mv dist/yonote${{ matrix.ext }} release/${{ matrix.artifact }}
         shell: bash
