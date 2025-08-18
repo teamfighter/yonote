@@ -14,6 +14,7 @@
 export YONOTE_VERSION=<latest tag>
 docker pull ghcr.io/teamfighter/yonote:$YONOTE_VERSION
 curl -O https://raw.githubusercontent.com/teamfighter/yonote/main/yonote.sh
+chmod +x yonote.sh
 source yonote.sh
 yonote --help
 ```
