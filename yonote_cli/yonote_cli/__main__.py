@@ -5,15 +5,30 @@ from __future__ import annotations
 import argparse
 import sys
 
-from .core import DEFAULT_BASE
-from .commands import (
-    cmd_auth_set,
-    cmd_auth_info,
-    cache_info,
-    cache_clear,
-    cmd_export,
-    cmd_import,
-)
+# Prefer absolute imports so the module works when bundled with tools like
+# PyInstaller.  When the package isn't installed (for example, when running
+# directly from a source checkout) fall back to relative imports so tests can
+# still invoke it using ``python -m``.
+try:  # pragma: no cover - exercised indirectly in tests
+    from yonote_cli.core import DEFAULT_BASE
+    from yonote_cli.commands import (
+        cmd_auth_set,
+        cmd_auth_info,
+        cache_info,
+        cache_clear,
+        cmd_export,
+        cmd_import,
+    )
+except ModuleNotFoundError:  # pragma: no cover
+    from .core import DEFAULT_BASE
+    from .commands import (
+        cmd_auth_set,
+        cmd_auth_info,
+        cache_info,
+        cache_clear,
+        cmd_export,
+        cmd_import,
+    )
 
 
 def main(argv=None):
