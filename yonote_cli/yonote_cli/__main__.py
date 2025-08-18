@@ -3,17 +3,38 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 
-from .core import DEFAULT_BASE
-from .commands import (
-    cmd_auth_set,
-    cmd_auth_info,
-    cache_info,
-    cache_clear,
-    cmd_export,
-    cmd_import,
-)
+# Prefer absolute imports so the module works when bundled with tools like
+# PyInstaller.  When the package isn't installed (for example, when running
+# directly from a source checkout) fall back to relative imports so tests can
+# still invoke it using ``python -m``.  When executed from a PyInstaller bundle
+# ``__package__`` is ``None`` which breaks relative imports, so we set it and
+# add this file's directory to ``sys.path`` before importing.
+try:  # pragma: no cover - exercised indirectly in tests
+    from yonote_cli.core import DEFAULT_BASE
+    from yonote_cli.commands import (
+        cmd_auth_set,
+        cmd_auth_info,
+        cache_info,
+        cache_clear,
+        cmd_export,
+        cmd_import,
+    )
+except ModuleNotFoundError:  # pragma: no cover
+    if __package__ in (None, ""):
+        sys.path.append(os.path.dirname(__file__))
+        __package__ = "yonote_cli"
+    from .core import DEFAULT_BASE
+    from .commands import (
+        cmd_auth_set,
+        cmd_auth_info,
+        cache_info,
+        cache_clear,
+        cmd_export,
+        cmd_import,
+    )
 
 
 def main(argv=None):
