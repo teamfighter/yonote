@@ -1,5 +1,8 @@
 # yonote-tools — CLI для Yonote
 
+[![CI](https://github.com/teamfighter/yonote/actions/workflows/ci.yml/badge.svg)](https://github.com/teamfighter/yonote/actions/workflows/ci.yml)
+[![Release](https://github.com/teamfighter/yonote/actions/workflows/release.yml/badge.svg)](https://github.com/teamfighter/yonote/actions/workflows/release.yml)
+
 Инструмент командной строки для экспорта и импорта документов из платформы [Yonote](https://yonote.ru). CLI умеет интерактивно просматривать коллекции и документы, обновлять кэш выборочно и работать с вложенными папками.
 
 ## Установка
@@ -84,5 +87,37 @@ yonote export --out-dir ./dump --format md --workers 8
 
 ```bash
 yonote import --src-dir ./dump
+```
+
+## Сборка и релизы
+
+Список зависимостей находится в файле `requirements.txt`. Готовые бинарники для Linux, macOS и Windows, а также Docker-образ публикуются автоматически при создании релиза на GitHub.
+
+### Локальная сборка бинарника
+
+```bash
+pip install -r requirements.txt
+pip install pyinstaller
+pyinstaller yonote_cli/yonote_cli/__main__.py --name yonote --onefile
+```
+
+Готовый исполняемый файл появится в каталоге `dist/`.
+
+### Локальная сборка Docker-образа
+
+```bash
+docker build -f docker/Dockerfile -t yonote:latest .
+```
+
+Образ из релизов доступен в GitHub Container Registry:
+
+```bash
+docker pull ghcr.io/teamfighter/yonote:<tag>
+```
+
+### Запуск тестов
+
+```bash
+pytest
 ```
 
