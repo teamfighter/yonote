@@ -9,6 +9,7 @@ import sys
 # Prefer absolute imports so the module works when bundled with tools like
 # PyInstaller.  When the package isn't installed (for example, when running
 # directly from a source checkout) fall back to relative imports so tests can
+
 # still invoke it using ``python -m``.  When executed from a PyInstaller bundle
 # ``__package__`` is ``None`` which breaks relative imports, so we set it and
 # add this file's directory to ``sys.path`` before importing.
