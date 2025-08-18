@@ -32,7 +32,7 @@ yonote auth set --base-url https://example.yonote.ru --token <JWT>
 ## Экспорт
 
 ```bash
-yonote export --out-dir ./dump --workers 12 --format md
+yonote export --out-dir ./dump --workers 4 --format md
 ```
 
 Команда откроет встроенный браузер для выбора коллекций и документов. Выбранные элементы выгружаются в указанную директорию с сохранением иерархии. Полезные флаги:
@@ -54,7 +54,7 @@ CLI предложит выбрать коллекцию и родительск
 
 ## Встроенный браузер
 
-Интерактивные диалоги экспорта и импорта используют встроенный браузер. Доступные клавиши:
+Интерактивные диалоги экспорта и импорта используют встроенный браузер. Библиотека [InquirerPy](https://github.com/kazhala/InquirerPy), на которой он основан, включена в состав готовых бинарников, поэтому дополнительная установка не требуется. Доступные клавиши:
 
 - `↑`/`↓` — перемещение по списку;
 - `PgUp`/`PgDn` — пролистывание по 10 элементов;
@@ -80,7 +80,7 @@ yonote cache clear  # очистить кэш
 ### Экспорт коллекции в Markdown
 
 ```bash
-yonote export --out-dir ./dump --format md --workers 8
+yonote export --out-dir ./dump --format md --workers 4
 ```
 
 ### Импорт подготовленных файлов
@@ -95,17 +95,17 @@ yonote import --src-dir ./dump
 
 ### Локальная сборка бинарника
 
-Сборку лучше выполнять под Python 3.11 на базе Debian Bullseye, чтобы
-получившийся бинарник не требовал современную версию `glibc`. Самый простой
-способ — воспользоваться контейнером Docker:
+Чтобы готовый исполняемый файл работал на системах с более старой `glibc`,
+сборку необходимо выполнять в окружении Debian Bullseye с Python 3.11. Для
+упрощения добавлена цель `make build`, которая запускает PyInstaller внутри
+Docker-контейнера с подходящей версией `glibc` и устанавливает пакет `binutils`
+для доступности `objdump`.
 
 ```bash
-docker run --rm -v "$PWD":/src -w /src python:3.11-slim-bullseye \
-    bash -c "pip install -r requirements.txt pyinstaller && \
-             pyinstaller yonote_cli/yonote_cli/__main__.py --name yonote --onefile"
+make build
 ```
 
-Исполняемый файл появится в каталоге `dist/`.
+Результат появится в каталоге `dist/`.
 
 ### Локальная сборка Docker-образа
 
