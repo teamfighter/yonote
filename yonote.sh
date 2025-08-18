@@ -7,7 +7,7 @@ yonote() {
   docker run --rm -it \
     -v "$HOME/.yonote.json:/root/.yonote.json" \
     -v "$HOME/.yonote-cache.json:/root/.yonote-cache.json" \
-    -v "$(pwd):/work" \
-    -w /work \
+    -v "$(pwd):/app/work" \
+    -w /app/work \
     ghcr.io/teamfighter/yonote:${YONOTE_VERSION:-latest} "$@"
 }
