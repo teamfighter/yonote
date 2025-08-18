@@ -5,55 +5,6 @@ on:
     types: [published]
 
 jobs:
-  build:
-    name: Build binaries
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        include:
-          - os: ubuntu-latest
-            artifact: yonote-linux
-            ext: ""
-          - os: macos-latest
-            artifact: yonote-macos
-            ext: ""
-          - os: windows-latest
-            artifact: yonote-windows.exe
-            ext: ".exe"
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
-      - name: Install dependencies
-        run: |
-          pip install -r requirements.txt
-      - name: Run tests
-        run: pytest
-      - name: Build executable (Linux)
-        if: matrix.os == 'ubuntu-latest'
-        run: |
-          docker run --rm -v "$PWD":/src -w /src python:3.11-slim-bullseye \
-            bash -c "apt-get update && apt-get install -y binutils && \
-                     pip install -r requirements.txt && \
-                     pyinstaller yonote_cli/yonote_cli/__main__.py --name yonote --onefile --collect-all InquirerPy"
-          mkdir release
-          mv dist/yonote release/${{ matrix.artifact }}
-        shell: bash
-      - name: Build executable (macOS/Windows)
-        if: matrix.os != 'ubuntu-latest'
-        run: |
-          pyinstaller yonote_cli/yonote_cli/__main__.py --name yonote --onefile --collect-all InquirerPy
-          mkdir release
-          mv dist/yonote${{ matrix.ext }} release/${{ matrix.artifact }}
-        shell: bash
-      - name: Upload release asset
-        uses: softprops/action-gh-release@v1
-        with:
-          files: release/${{ matrix.artifact }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
   docker:
     name: Docker image
     runs-on: ubuntu-latest
@@ -71,3 +22,12 @@ jobs:
           file: docker/Dockerfile
           push: true
           tags: ghcr.io/${{ github.repository_owner }}/yonote:${{ github.ref_name }}
+      - name: Update release notes
+        uses: softprops/action-gh-release@v1
+        with:
+          body: |
+            ${{ github.event.release.body }}
+
+            ```bash
+            docker pull ghcr.io/${{ github.repository_owner }}/yonote:${{ github.ref_name }}
+            ```

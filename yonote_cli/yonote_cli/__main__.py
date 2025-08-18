@@ -6,13 +6,10 @@ import argparse
 import os
 import sys
 
-# Prefer absolute imports so the module works when bundled with tools like
-# PyInstaller.  When the package isn't installed (for example, when running
-# directly from a source checkout) fall back to relative imports so tests can
-
-# still invoke it using ``python -m``.  When executed from a PyInstaller bundle
-# ``__package__`` is ``None`` which breaks relative imports, so we set it and
-# add this file's directory to ``sys.path`` before importing.
+# Prefer absolute imports so the module works when installed as a package.
+# When running directly from a source checkout fall back to relative imports so
+# tests can invoke it using ``python -m``. If ``__package__`` is ``None`` we set
+# it and add this file's directory to ``sys.path`` before importing.
 try:  # pragma: no cover - exercised indirectly in tests
     from yonote_cli.core import DEFAULT_BASE
     from yonote_cli.commands import (
