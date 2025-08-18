@@ -95,17 +95,16 @@ yonote import --src-dir ./dump
 
 ### Локальная сборка бинарника
 
-Сборку лучше выполнять под Python 3.11 на базе Debian Bullseye, чтобы
-получившийся бинарник не требовал современную версию `glibc`. Самый простой
-способ — воспользоваться контейнером Docker:
+Чтобы готовый исполняемый файл работал на системах с более старой `glibc`,
+сборку необходимо выполнять в окружении Debian Bullseye с Python 3.11. Для
+упрощения добавлена цель `make build`, которая запускает PyInstaller внутри
+Docker-контейнера с подходящей версией `glibc`.
 
 ```bash
-docker run --rm -v "$PWD":/src -w /src python:3.11-slim-bullseye \
-    bash -c "pip install -r requirements.txt pyinstaller && \
-             pyinstaller yonote_cli/yonote_cli/__main__.py --name yonote --onefile"
+make build
 ```
 
-Исполняемый файл появится в каталоге `dist/`.
+Результат появится в каталоге `dist/`.
 
 ### Локальная сборка Docker-образа
 
