@@ -7,7 +7,7 @@ Command line tool for exporting and importing documents from [Yonote](https://yo
 
 ## Run with Docker
 
-Images are published to the [GitHub Container Registry](https://github.com/orgs/teamfighter/packages). To use the CLI pull the image and source the helper script:
+Images are published to the [GitHub Container Registry](https://github.com/teamfighter/yonote/pkgs/container/yonote). To use the CLI pull the image and source the helper script:
 
 ```bash
 export YONOTE_VERSION=<latest tag>
