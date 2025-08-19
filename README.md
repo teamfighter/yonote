@@ -1,14 +1,13 @@
-# yonote-tools — CLI для Yonote
+# yonote-tools — CLI for Yonote
 
 [![CI](https://github.com/teamfighter/yonote/actions/workflows/ci.yml/badge.svg)](https://github.com/teamfighter/yonote/actions/workflows/ci.yml)
 [![Release](https://github.com/teamfighter/yonote/actions/workflows/release.yml/badge.svg)](https://github.com/teamfighter/yonote/actions/workflows/release.yml)
 
-Инструмент командной строки для экспорта и импорта документов из платформы [Yonote](https://yonote.ru). CLI умеет интерактивно просматривать коллекции и документы, обновлять кэш выборочно и работать с вложенными папками.
+Command line tool for exporting and importing documents from [Yonote](https://yonote.ru). The CLI can browse collections and documents interactively, refresh the cache selectively and work with nested folders.
 
-## Запуск в Docker
+## Run with Docker
 
-Образ публикуется в [GitHub Container Registry](https://github.com/orgs/teamfighter/packages). Для работы с CLI достаточно
-загрузить образ и подключить shell‑обёртку:
+Images are published to the [GitHub Container Registry](https://github.com/orgs/teamfighter/packages). To use the CLI pull the image and source the helper script:
 
 ```bash
 export YONOTE_VERSION=<latest tag>
@@ -19,12 +18,11 @@ source yonote.sh
 yonote --help
 ```
 
-Обёртка монтирует файлы `~/.yonote.json` и `~/.yonote-cache.json`, а также текущую директорию в `/app/work`, что позволяет
-использовать относительные пути. Далее во всех примерах предполагается, что функция `yonote` уже доступна.
+The wrapper mounts `~/.yonote.json` and `~/.yonote-cache.json` along with the current directory into `/app/work`, allowing relative paths. The examples below assume the `yonote` function is already available.
 
-## Запуск через Python venv
+## Run through Python venv
 
-Альтернативно CLI можно установить в локальное виртуальное окружение Python:
+Alternatively install the CLI into a local virtual environment:
 
 ```bash
 python -m venv .venv
@@ -34,89 +32,88 @@ pip install -e yonote_cli
 yonote --help
 ```
 
-## Настройка доступа
+## Access configuration
 
-Получите JWT‑токен в интерфейсе Yonote и сохраните параметры подключения:
-
-```bash
-yonote auth set --base-url https://example.yonote.ru --token <JWT>
-```
-
-Конфигурация хранится в `~/.yonote.json`, а кэш структуры документов — в `~/.yonote-cache.json`.
-
-## Экспорт
+Obtain a JWT token in the Yonote UI and save the connection parameters:
 
 ```bash
-yonote export --out-dir ./dump --workers 4 --format md
+yonote auth set --base-url https://app.yonote.ru --token <JWT>
 ```
 
-Команда откроет встроенный браузер для выбора коллекций и документов. Выбранные элементы выгружаются в указанную директорию с сохранением иерархии. Полезные флаги:
+The configuration is stored in `~/.yonote.json`; document structure cache is stored in `~/.yonote-cache.json`.
 
-- `--refresh-cache` — принудительно обновить кэш метаданных;
-- `--format md|json` — формат выгрузки файлов;
-- `--use-ids` — использовать идентификаторы в именах файлов.
-
-## Импорт
+## Export
 
 ```bash
-yonote import --src-dir ./dump
+yonote export --out-dir ./dump --workers 20
 ```
 
-CLI предложит выбрать коллекцию и родительский документ, затем воспроизведёт локальную структуру каталогов в Yonote и опубликует созданные документы. Опции:
+The command opens an interactive browser to pick collections and documents. Selected items are written to the target directory preserving hierarchy. Useful flags:
 
-- `--refresh-cache` — обновить кэш перед выбором;
-- `--workers N` — максимальное число потоков при создании документов.
+- `--refresh-cache` – refresh metadata cache;
+- `--use-ids` – use identifiers in file names.
 
-## Встроенный браузер
-
-Интерактивные диалоги экспорта и импорта используют встроенный браузер. Библиотека [InquirerPy](https://github.com/kazhala/InquirerPy), на которой он основан, включена в образ последних версий. Если при запуске появляется сообщение `Interactive mode requires InquirerPy`, обновите `YONOTE_VERSION` до актуального тега. Доступные клавиши:
-
-- `↑`/`↓` — перемещение по списку;
-- `PgUp`/`PgDn` — пролистывание по 10 элементов;
-- `Enter` — открыть раздел или подтвердить действие;
-- `Space` — отметить/снять документ в режиме экспорта;
-- `Ctrl+S` — поиск; повторное `Ctrl+S` выходит из режима поиска, `Enter` переходит к следующему совпадению;
-- `Ctrl+R` — обновить текущий список с сервера (точечный сброс кэша);
-- `..` — перейти на уровень выше.
-
-## Работа с кэшем
-
-Метаданные коллекций и документов сохраняются в `~/.yonote-cache.json`. Управлять кэшем можно командами:
-
-```bash
-yonote cache info   # показать информацию о кэше
-yonote cache clear  # очистить кэш
-```
-
-Флаг `--refresh-cache` или сочетание `Ctrl+R` позволяют обновлять только нужные ветки дерева, сокращая время запросов.
-
-## Примеры
-
-### Экспорт коллекции в Markdown
-
-```bash
-yonote export --out-dir ./dump --format md --workers 4
-```
-
-### Импорт подготовленных файлов
+## Import
 
 ```bash
 yonote import --src-dir ./dump
 ```
 
-Команда для загрузки образа с конкретной версией публикуется в релизных заметках.
+The CLI prompts for a collection and parent document, then reproduces the local folder structure inside Yonote and publishes created documents. Options:
 
-## Локальная разработка
+- `--refresh-cache` – refresh cache before selection;
+- `--workers N` – maximum number of threads for document creation (default 20).
 
-Следуйте инструкции из раздела [«Запуск через Python venv»](#запуск-через-python-venv), затем запустите тесты и при необходимости соберите образ.
+## Interactive browser
 
-### Запуск тестов
+Export and import dialogs rely on an interactive browser. It is based on [InquirerPy](https://github.com/kazhala/InquirerPy) which is included in the latest images. If you see `Interactive mode requires InquirerPy`, update `YONOTE_VERSION` to the latest tag. Available keys:
+
+- `↑`/`↓` – move through the list;
+- `PgUp`/`PgDn` – scroll by 10 items;
+- `Enter` – open a section or confirm action;
+- `Space` – mark/unmark documents during export;
+- `Ctrl+S` – search; press again to exit search, `Enter` jumps to the next match;
+- `Ctrl+R` – refresh the current list from the server (selective cache reset);
+- `..` – go one level up.
+
+## Working with cache
+
+Collection and document metadata is stored in `~/.yonote-cache.json`. Use the following commands to manage the cache:
+
+```bash
+yonote cache info   # show cache information
+yonote cache clear  # delete cache
+```
+
+The `--refresh-cache` flag or `Ctrl+R` shortcut let you refresh only required branches, reducing request time.
+
+## Examples
+
+### Export a collection to Markdown
+
+```bash
+yonote export --out-dir ./dump --workers 20
+```
+
+### Import prepared files
+
+```bash
+yonote import --src-dir ./dump
+```
+
+Commands for pulling images with specific versions are published in release notes.
+
+## Local development
+
+Follow the instructions from [Run through Python venv](#run-through-python-venv), then run tests and build the image if needed.
+
+### Run tests
 
 ```bash
 pytest
 ```
 
-### Сборка Docker-образа
+### Build the Docker image
 
 ```bash
 docker build -f docker/Dockerfile -t yonote:dev .
