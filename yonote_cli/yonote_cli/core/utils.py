@@ -87,11 +87,18 @@ def fetch_all_concurrent(
     first = _post_page(base, token, path, params, limit, 0)
     items = list(first.get("data") or [])
     n_first = len(items)
+    pagination = first.get("pagination") or {}
+    next_path = pagination.get("nextPath")
+    total = pagination.get("total")
+
+    # Fast path: single short page and no explicit next link
+    if n_first < limit and not next_path:
+        with tqdm(total=1, unit="pg", desc=desc) as bar:
+            bar.update(1)
+        return items
 
     with tqdm(total=None, unit="pg", desc=desc) as bar:
         bar.update(1)
-        pagination = first.get("pagination") or {}
-        next_path = pagination.get("nextPath")
 
         # Sequential path-based pagination when server provides nextPath
         if next_path:
@@ -112,11 +119,18 @@ def fetch_all_concurrent(
         next_offset = limit
         with ThreadPoolExecutor(max_workers=max(1, workers)) as ex:
             while True:
+                if total is not None and next_offset >= total:
+                    break
                 offsets = list(range(next_offset, next_offset + limit * workers, limit))
+                if total is not None:
+                    offsets = [off for off in offsets if off < total]
                 if not offsets:
                     break
                 stop = False
-                futures = {ex.submit(_post_page, base, token, path, params, limit, off): off for off in offsets}
+                futures = {
+                    ex.submit(_post_page, base, token, path, params, limit, off): off
+                    for off in offsets
+                }
                 for fut in as_completed(futures):
                     data = fut.result()
                     page_items = data.get("data") or []
@@ -124,6 +138,11 @@ def fetch_all_concurrent(
                     bar.update(1)
                     if len(page_items) < limit:
                         stop = True
+                    if total is None:
+                        pag = data.get("pagination") or {}
+                        t = pag.get("total")
+                        if isinstance(t, int):
+                            total = t
                 next_offset += limit * workers
                 if stop:
                     break
