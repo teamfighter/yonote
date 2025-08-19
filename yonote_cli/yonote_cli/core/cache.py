@@ -32,6 +32,7 @@ def list_collections(
     use_cache: bool,
     refresh_cache: bool,
     workers: int,
+    desc: str | None = "Fetch collections",
 ) -> List[dict]:
     cache = load_cache() if use_cache else {}
     if use_cache and not refresh_cache and "collections" in cache:
@@ -43,7 +44,7 @@ def list_collections(
         params={},
         limit=API_MAX_LIMIT,
         workers=workers,
-        desc="Fetch collections",
+        desc=desc,
     )
     if use_cache:
         cache["collections"] = cols
@@ -59,6 +60,7 @@ def list_documents_in_collection(
     use_cache: bool,
     refresh_cache: bool,
     workers: int,
+    desc: str | None = "Fetch docs",
 ) -> List[dict]:
     cache = load_cache() if use_cache else {}
     coll_key = f"collection:{collection_id}"
@@ -70,7 +72,7 @@ def list_documents_in_collection(
         "/documents.list",
         params={"collectionId": collection_id},
         workers=workers,
-        desc="Fetch docs",
+        desc=desc,
     )
     if use_cache:
         cache[coll_key] = docs
@@ -85,6 +87,7 @@ def refresh_document_branch(
     parent_id: str | None,
     *,
     workers: int,
+    desc: str | None = "Refresh docs",
 ) -> List[dict]:
     """Refresh cached documents under *parent_id* within *collection_id*.
 
@@ -107,7 +110,7 @@ def refresh_document_branch(
         "/documents.list",
         params=params,
         workers=workers,
-        desc="Refresh docs",
+        desc=desc,
     )
 
     to_remove: set[str] = set()

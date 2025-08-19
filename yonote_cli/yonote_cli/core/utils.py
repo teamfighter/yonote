@@ -71,21 +71,30 @@ def fetch_all_concurrent(
     params: Dict[str, Any] | None = None,
     limit: int = API_MAX_LIMIT,
     workers: int = 20,
-    desc: str = "Loading",
+    desc: str | None = "Loading",
 ) -> List[dict]:
-    """Fetch all pages concurrently until a short page is received."""
+    """Fetch all pages concurrently until a short page is received.
+
+    If ``desc`` is ``None`` the progress bar is suppressed. This is useful for
+    interactive "browser" views where a bar would be noisy.
+    """
+    from contextlib import nullcontext
+
     limit = min(limit, API_MAX_LIMIT)
     params = dict(params or {})
 
     results: List[dict] = []
 
-    with tqdm(total=None, unit="pg", desc=desc) as bar:
-        bar.update(0)  # show bar immediately
+    ctx = tqdm(total=None, unit="pg", desc=desc) if desc else nullcontext()
+    with ctx as bar:
+        if desc:
+            bar.update(0)  # show bar immediately
 
         first = _post_page(base, token, path, params, limit, 0)
         items = first.get("data") or []
         results.extend(items)
-        bar.update(1)
+        if desc:
+            bar.update(1)
         total = first.get("pagination", {}).get("total")
 
         if len(items) < limit or (isinstance(total, int) and len(results) >= total):
@@ -104,12 +113,16 @@ def fetch_all_concurrent(
                 break
             stop = False
             with ThreadPoolExecutor(max_workers=max(1, workers)) as ex:
-                futures = {ex.submit(_post_page, base, token, path, params, limit, off): off for off in offsets}
+                futures = {
+                    ex.submit(_post_page, base, token, path, params, limit, off): off
+                    for off in offsets
+                }
                 for fut in as_completed(futures):
                     data = fut.result()
                     page_items = data.get("data") or []
                     results.extend(page_items)
-                    bar.update(1)
+                    if desc:
+                        bar.update(1)
                     if len(page_items) < limit:
                         stop = True
                     if isinstance(total, int) and len(results) >= total:

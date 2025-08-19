@@ -7,7 +7,6 @@ import sys
 
 from .cache import (
     list_collections,
-    list_documents_in_collection,
     refresh_document_branch,
     load_cache,
 )
@@ -133,7 +132,12 @@ def interactive_browse_for_export(
         sys.exit(2)
     print("Загрузка списка коллекций...", file=sys.stderr)
     collections = list_collections(
-        base, token, use_cache=True, refresh_cache=refresh_cache, workers=workers
+        base,
+        token,
+        use_cache=True,
+        refresh_cache=refresh_cache,
+        workers=workers,
+        desc=None,
     )
     cols_by_id = {c.get("id"): c for c in collections}
     selected_docs: set[str] = set()
@@ -156,6 +160,7 @@ def interactive_browse_for_export(
                 coll_id,
                 pid,
                 workers=workers,
+                desc=None,
             )
             children = {}
             for d in docs:
@@ -270,6 +275,7 @@ def interactive_browse_for_export(
                         coll_id,
                         parent_id,
                         workers=workers,
+                        desc=None,
                     )
                     children = {}
                     for d in docs:
@@ -409,6 +415,7 @@ def interactive_browse_for_export(
                 use_cache=True,
                 refresh_cache=True,
                 workers=workers,
+                desc=None,
             )
             event.app.exit(result="__refresh__")
 
@@ -485,66 +492,76 @@ def interactive_pick_destination(
         sys.exit(2)
 
     collections = list_collections(
-        base, token, use_cache=True, refresh_cache=refresh_cache, workers=workers
+        base,
+        token,
+        use_cache=True,
+        refresh_cache=refresh_cache,
+        workers=workers,
+        desc=None,
     )
 
     def browse_collection(coll: dict) -> Tuple[str, Optional[str], str] | None:
         coll_id = coll.get("id")
-        docs = list_documents_in_collection(
-            base,
-            token,
-            coll_id,
-            use_cache=True,
-            refresh_cache=refresh_cache,
-            workers=workers,
-        )
-
+        cache = load_cache()
+        coll_key = f"collection:{coll_id}"
+        docs = list(cache.get(coll_key, []))
         children: Dict[Optional[str], List[dict]] = {}
         for d in docs:
             children.setdefault(d.get("parentDocumentId"), []).append(d)
 
-        def browse(parent_id: Optional[str], path: str) -> Tuple[str, Optional[str], str] | None:
+        def load_children(pid: Optional[str]) -> None:
+            nonlocal docs, children
+            docs = refresh_document_branch(
+                base,
+                token,
+                coll_id,
+                pid,
+                workers=workers,
+                desc=None,
+            )
+            children = {}
+            for d in docs:
+                children.setdefault(d.get("parentDocumentId"), []).append(d)
+
+        if refresh_cache or not docs:
+            load_children(None)
+
+        selected: Optional[str] = None  # "__root" or document id
+        selected_label: str = coll.get("name") or "(без названия)"
+        def browse(parent_id: Optional[str], path: str, current: Optional[dict]) -> Tuple[str, Optional[str], str] | None:
+            nonlocal selected, selected_label, docs, children
             search: Dict[str, Optional[object]] = {"query": None, "index": 0, "default": None}
 
             def build_choices() -> List[dict]:
                 choices: List[dict] = [{"name": "..", "value": "__up"}]
-                if parent_id is None:
-                    choices.append(
-                        {
-                            "name": "Импортировать в корень коллекции",
-                            "value": "__choose__",
-                        }
-                    )
+                if current is None:
+                    mark = "[x]" if selected == "__root" else "[ ]"
+                    choices.append({"name": f"{mark} Импортировать в корень коллекции", "value": "__sel_root"})
                 else:
-                    choices.append(
-                        {
-                            "name": "Импортировать сюда",
-                            "value": "__choose__",
-                        }
-                    )
+                    mark = "[x]" if selected == current.get("id") else "[ ]"
+                    choices.append({"name": f"{mark} Импортировать сюда", "value": "__sel_here"})
                 for d in children.get(parent_id, []):
                     did = d.get("id")
+                    has_children = did in children
+                    mark = "[x]" if selected == did else "[ ]"
                     title = d.get("title") or "(без названия)"
-                    suffix = "/" if did in children else ""
-                    choices.append({"name": f"{title}{suffix}", "value": ("doc", d)})
+                    suffix = "/" if has_children else ""
+                    choices.append({"name": f"{mark} {title}{suffix}", "value": ("doc", d)})
+                choices.append({"name": "<Готово>", "value": "__done"})
                 return choices
 
             while True:
                 choices = build_choices()
                 default_val = search.pop("default", None)
                 if search["query"]:
-                    matches = [
-                        c["value"]
-                        for c in choices
-                        if search["query"].lower() in c["name"].lower()
-                    ]
+                    matches = [c["value"] for c in choices if search["query"].lower() in c["name"].lower()]
                     if matches:
                         default_val = matches[search["index"] % len(matches)]
                 prompt = ListPrompt(
                     message=path,
                     choices=choices,
                     default=default_val,
-                    instruction="↑/↓, PgUp/PgDn, Space: выбрать, Ctrl+R обновить, Enter, Ctrl+S поиск",
+                    instruction="↑/↓, PgUp/PgDn, Space выбрать, Ctrl+R обновить, Enter, Ctrl+S поиск",
                     height="90%",
                     keybindings={
                         "pageup": [{"key": "pageup"}],
@@ -559,8 +576,7 @@ def interactive_pick_destination(
                 def _page(step: int) -> None:
                     cc = prompt.content_control
                     cc.selected_choice_index = max(
-                        0,
-                        min(cc.choice_count - 1, cc.selected_choice_index + step),
+                        0, min(cc.choice_count - 1, cc.selected_choice_index + step)
                     )
 
                 def _page_up(event) -> None:
@@ -568,24 +584,32 @@ def interactive_pick_destination(
 
                 def _page_down(event) -> None:
                     _page(10)
-
                 def _choose(event) -> None:
+                    nonlocal selected, selected_label
                     search["default"] = prompt.content_control.selection["value"]
-                    event.app.exit(result="__choose__")
+                    val = prompt.content_control.selection["value"]
+                    if val == "__sel_root":
+                        target = "__root"
+                        label = coll.get("name") or "(без названия)"
+                    elif val == "__sel_here" and current is not None:
+                        target = current.get("id")
+                        label = path
+                    elif isinstance(val, tuple) and val[0] == "doc":
+                        target = val[1].get("id")
+                        label = f"{path}/{val[1].get('title') or '(без названия)'}"
+                    else:
+                        return
+                    if selected == target:
+                        selected = None
+                    else:
+                        selected = target
+                        selected_label = label
+                    event.app.exit(result="__refresh__")
 
                 def _refresh(event) -> None:
                     nonlocal docs, children
                     search["default"] = prompt.content_control.selection["value"]
-                    docs = refresh_document_branch(
-                        base,
-                        token,
-                        coll_id,
-                        parent_id,
-                        workers=workers,
-                    )
-                    children = {}
-                    for d in docs:
-                        children.setdefault(d.get("parentDocumentId"), []).append(d)
+                    load_children(parent_id)
                     event.app.exit(result="__refresh__")
 
                 def _search(event) -> None:
@@ -623,11 +647,7 @@ def interactive_pick_destination(
                 if choice == "__refresh__":
                     continue
                 if choice == "__search__":
-                    q = _execute(
-                        inquirer.text(
-                            message="Поиск:", default=search["query"] or "",
-                        )
-                    )
+                    q = _execute(inquirer.text(message="Поиск:", default=search["query"] or ""))
                     if q:
                         if q == search["query"]:
                             search["index"] += 1
@@ -640,21 +660,26 @@ def interactive_pick_destination(
                         search["query"] = None
                         search["index"] = 0
                     continue
-                if choice == "__choose__":
-                    label = path if parent_id is None else f"{path}"
-                    return (coll_id, parent_id, label)
-                typ, obj = choice
-                did = obj.get("id")
-                title = obj.get("title") or "(без названия)"
-                if did in children:
-                    res = browse(did, f"{path}/{title}")
-                    if res:
-                        return res
-                else:
-                    # leaf node selected via Enter behaves like choose
-                    return (coll_id, did, f"{path}/{title}")
+                if choice == "__done":
+                    if selected is None:
+                        continue
+                    if selected == "__root":
+                        return coll_id, None, coll.get("name") or "(без названия)"
+                    return coll_id, selected, selected_label
+                if choice in ("__sel_root", "__sel_here"):
+                    continue
+                typ, doc = choice
+                if typ == "doc":
+                    did = doc.get("id")
+                    title = doc.get("title") or "(без названия)"
+                    load_children(did)
+                    if did in children:
+                        res = browse(did, f"{path}/{title}", doc)
+                        if res:
+                            return res
+                    # if no children, do nothing
 
-        return browse(None, coll.get("name") or "(без названия)")
+        return browse(None, coll.get("name") or "(без названия)", None)
 
     search: Dict[str, Optional[object]] = {"query": None, "index": 0, "default": None}
     while True:
@@ -697,7 +722,6 @@ def interactive_pick_destination(
 
         def _page_down(event) -> None:
             _page(10)
-
         def _refresh(event) -> None:
             nonlocal collections
             search["default"] = prompt.content_control.selection["value"]
@@ -707,6 +731,7 @@ def interactive_pick_destination(
                 use_cache=True,
                 refresh_cache=True,
                 workers=workers,
+                desc=None,
             )
             event.app.exit(result="__refresh__")
 
@@ -742,9 +767,7 @@ def interactive_pick_destination(
         if coll == "__refresh__":
             continue
         if coll == "__search__":
-            q = _execute(
-                inquirer.text(message="Поиск:", default=search["query"] or "")
-            )
+            q = _execute(inquirer.text(message="Поиск:", default=search["query"] or ""))
             if q:
                 if q == search["query"]:
                     search["index"] += 1
