@@ -9,13 +9,14 @@ from typing import Any, Dict
 import requests
 
 
-_session = requests.Session()
-
-
 def http_json(method: str, url: str, token: str, payload: Dict[str, Any] | None = None) -> Dict[str, Any] | bytes:
     headers = {"Accept": "application/json", "Authorization": f"Bearer {token}"}
     try:
-        resp = _session.request(
+        # Using a global ``requests.Session`` can lead to deadlocks when these
+        # helpers are used from multiple threads.  The export command fetches
+        # many documents concurrently, so we issue standalone requests instead
+        # of sharing a session which is not thread-safe.
+        resp = requests.request(
             method.upper(),
             url,
             json=payload,
@@ -50,7 +51,7 @@ def http_multipart_post(url: str, token: str, fields: Dict[str, object]) -> Dict
             data[name] = value
     headers = {"Accept": "application/json", "Authorization": f"Bearer {token}"}
     try:
-        resp = _session.post(url, headers=headers, data=data, files=files, timeout=120)
+        resp = requests.post(url, headers=headers, data=data, files=files, timeout=120)
         resp.raise_for_status()
         ctype = (resp.headers.get("Content-Type") or "").lower()
         if "application/json" in ctype:
