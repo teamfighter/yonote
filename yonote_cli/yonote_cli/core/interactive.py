@@ -9,6 +9,7 @@ from .cache import (
     list_collections,
     list_documents_in_collection,
     refresh_document_branch,
+    load_cache,
 )
 
 try:
@@ -140,17 +141,28 @@ def interactive_browse_for_export(
 
     def browse_collection(coll: dict) -> Optional[str]:
         coll_id = coll.get("id")
-        docs = list_documents_in_collection(
-            base,
-            token,
-            coll_id,
-            use_cache=True,
-            refresh_cache=refresh_cache,
-            workers=workers,
-        )
+        cache = load_cache()
+        coll_key = f"collection:{coll_id}"
+        docs = list(cache.get(coll_key, []))
         children: Dict[Optional[str], List[dict]] = {}
         for d in docs:
             children.setdefault(d.get("parentDocumentId"), []).append(d)
+
+        def load_children(pid: Optional[str]) -> None:
+            nonlocal docs, children
+            docs = refresh_document_branch(
+                base,
+                token,
+                coll_id,
+                pid,
+                workers=workers,
+            )
+            children = {}
+            for d in docs:
+                children.setdefault(d.get("parentDocumentId"), []).append(d)
+
+        if refresh_cache or not docs:
+            load_children(None)
 
         def toggle_descendants(doc_id: str) -> None:
             stack = [doc_id]
@@ -329,14 +341,16 @@ def interactive_browse_for_export(
                     toggle_descendants(did)
                     continue
                 typ, doc = choice
-                title = doc.get("title") or "(без названия)"
-                did = doc.get("id")
-                if did in children:
-                    res = browse(did, f"{path}/{title}", doc)
-                    if res == "done":
-                        return "done"
-                else:
-                    toggle_descendants(did)
+                if typ == "doc":
+                    title = doc.get("title") or "(без названия)"
+                    did = doc.get("id")
+                    load_children(did)
+                    if did in children:
+                        res = browse(did, f"{path}/{title}", doc)
+                        if res == "done":
+                            return "done"
+                    else:
+                        toggle_descendants(did)
 
         return browse(None, coll.get("name") or "(без названия)", None)
 
