@@ -1,4 +1,4 @@
-"""Import Markdown files into Yonote."""
+"""Implementation of the ``yonote import`` command."""
 
 from __future__ import annotations
 
@@ -14,18 +14,24 @@ from ..core import (
 )
 
 
-def _iter_md_files(path: Path) -> List[Path]:
+def _collect_md_files(path: Path) -> List[Path]:
+    """Return all ``.md`` files under ``path`` recursively."""
+
     return [p for p in path.rglob("*.md") if p.is_file()]
 
 
 def cmd_import(args):
+    """Entry point for the ``import`` sub-command."""
+
     base, token = get_base_and_token()
     src_dir = Path(args.src_dir).resolve()
-    files = _iter_md_files(src_dir)
+    files = _collect_md_files(src_dir)
     if not files:
         print("Нет файлов *.md для импорта")
         return
 
+    # Ask the user where to upload documents.  The helper prints a loading
+    # message and allows browsing collections with the keyboard.
     while True:
         coll_id, parent_id, label = interactive_pick_destination(
             base,
@@ -42,6 +48,8 @@ def cmd_import(args):
     errors: List[Tuple[str, str]] = []
 
     def _create_doc(title: str, text: str, parent: Optional[str]) -> Optional[str]:
+        """Create a single document and return its id or ``None`` on error."""
+
         payload = {
             "title": title,
             "text": text,
@@ -62,8 +70,11 @@ def cmd_import(args):
             return None
 
     def _import_dir(path: Path, parent: Optional[str]):
+        """Recursively import documents from ``path``."""
+
         for entry in sorted(path.iterdir()):
             if entry.is_dir():
+                # Create a folder document and import its children.
                 doc_id = _create_doc(entry.name, "", parent)
                 if doc_id:
                     _import_dir(entry, doc_id)
@@ -90,6 +101,8 @@ def cmd_import(args):
 
 
 def _execute(prompt):
+    """Execute an ``InquirerPy`` prompt and handle Ctrl+C."""
+
     try:
         return prompt.execute()
     except KeyboardInterrupt:

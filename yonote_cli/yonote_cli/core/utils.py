@@ -38,19 +38,12 @@ __all__ = [
 
 
 
-def _post_page(
-    base: str,
-    token: str,
-    path: str,
-    params: Dict[str, Any],
-    limit: int,
-    offset: int | None,
-) -> Dict[str, Any]:
+def _post_page(base: str, token: str, path: str, params: Dict[str, Any], limit: int, offset: int) -> Dict[str, Any]:
+    """POST a single paginated request and return the JSON payload."""
     if limit > API_MAX_LIMIT:
         limit = API_MAX_LIMIT
     payload = dict(params or {})
-    if offset is not None:
-        payload.update({"limit": limit, "offset": offset})
+    payload.update({"limit": limit, "offset": offset})
 
     if path.startswith("http://") or path.startswith("https://"):
         url = path
@@ -77,57 +70,70 @@ def fetch_all_concurrent(
     *,
     params: Dict[str, Any] | None = None,
     limit: int = API_MAX_LIMIT,
-    workers: int = 8,
-    desc: str = "Loading",
+    workers: int = 20,
+    desc: str | None = "Loading",
 ) -> List[dict]:
-    """Fetch all pages concurrently until a short page is received."""
+    """Fetch all pages concurrently until a short page is received.
+
+    If ``desc`` is ``None`` the progress bar is suppressed. This is useful for
+    interactive "browser" views where a bar would be noisy.
+    """
+    from contextlib import nullcontext
+
     limit = min(limit, API_MAX_LIMIT)
     params = dict(params or {})
 
-    first = _post_page(base, token, path, params, limit, 0)
-    items = list(first.get("data") or [])
-    n_first = len(items)
+    results: List[dict] = []
 
-    with tqdm(total=None, unit="pg", desc=desc) as bar:
-        bar.update(1)
-        pagination = first.get("pagination") or {}
-        next_path = pagination.get("nextPath")
+    ctx = tqdm(total=None, unit="pg", desc=desc) if desc else nullcontext()
+    with ctx as bar:
+        if desc:
+            bar.update(0)  # show bar immediately
 
-        # Sequential path-based pagination when server provides nextPath
-        if next_path:
-            results: List[dict] = items
-            with ThreadPoolExecutor(max_workers=max(1, workers)) as ex:
-                while next_path:
-                    fut = ex.submit(_post_page, base, token, next_path, None, limit, None)
-                    data = fut.result()
-                    page_items = data.get("data") or []
-                    results.extend(page_items)
-                    bar.update(1)
-                    pagination = data.get("pagination") or {}
-                    next_path = pagination.get("nextPath")
+        first = _post_page(base, token, path, params, limit, 0)
+        items = first.get("data") or []
+        results.extend(items)
+        if desc:
+            bar.update(1)
+        total = first.get("pagination", {}).get("total")
+
+        if len(items) < limit or (isinstance(total, int) and len(results) >= total):
+            if isinstance(total, int):
+                return results[:total]
             return results
 
-        # Fallback to offset-based concurrent fetching
-        results: List[dict] = items
         next_offset = limit
-        with ThreadPoolExecutor(max_workers=max(1, workers)) as ex:
-            while True:
-                offsets = list(range(next_offset, next_offset + limit * workers, limit))
-                if not offsets:
-                    break
-                stop = False
-                futures = {ex.submit(_post_page, base, token, path, params, limit, off): off for off in offsets}
+        while True:
+            if isinstance(total, int) and next_offset >= total:
+                break
+            offsets = list(range(next_offset, next_offset + limit * workers, limit))
+            if isinstance(total, int):
+                offsets = [off for off in offsets if off < total]
+            if not offsets:
+                break
+            stop = False
+            with ThreadPoolExecutor(max_workers=max(1, workers)) as ex:
+                futures = {
+                    ex.submit(_post_page, base, token, path, params, limit, off): off
+                    for off in offsets
+                }
                 for fut in as_completed(futures):
                     data = fut.result()
                     page_items = data.get("data") or []
                     results.extend(page_items)
-                    bar.update(1)
+                    if desc:
+                        bar.update(1)
                     if len(page_items) < limit:
                         stop = True
-                next_offset += limit * workers
-                if stop:
-                    break
-        return results
+                    if isinstance(total, int) and len(results) >= total:
+                        stop = True
+            next_offset += limit * workers
+            if stop:
+                break
+
+    if isinstance(total, int):
+        return results[:total]
+    return results
 
 
 def format_rows(rows: List[Dict[str, Any]], fields: List[str]) -> None:

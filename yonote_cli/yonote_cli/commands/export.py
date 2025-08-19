@@ -15,6 +15,7 @@ from ..core import (
     safe_name,
     tqdm,
     http_json,
+    fetch_all_concurrent,
 )
 
 
@@ -31,35 +32,6 @@ def cmd_export(args):
         refresh_cache=args.refresh_cache,
     )
 
-    # include documents from selected collections
-    collections = list_collections(
-        base,
-        token,
-        use_cache=True,
-        refresh_cache=args.refresh_cache,
-        workers=args.workers,
-    )
-    cols_by_id = {c.get("id"): c for c in collections}
-    all_ids = set(doc_ids)
-    for cid in col_ids:
-        docs = list_documents_in_collection(
-            base,
-            token,
-            cid,
-            use_cache=True,
-            refresh_cache=args.refresh_cache,
-            workers=args.workers,
-        )
-        for d in docs:
-            did = d.get("id")
-            if did:
-                all_ids.add(did)
-
-    if not all_ids:
-        print("Ничего не выбрано для экспорта")
-        return
-
-    ext = args.format if args.format != "markdown" else "md"
     info_cache: Dict[str, dict] = {}
 
     def get_info(doc_id: str) -> dict:
@@ -70,6 +42,77 @@ def cmd_export(args):
             except Exception:
                 info_cache[doc_id] = {}
         return info_cache.get(doc_id, {})
+
+    def gather_descendants(doc_id: str) -> set[str]:
+        """Return ``doc_id`` and all of its descendants.
+
+        The API lazily loads branches, so when a parent is selected for export
+        its children may not be cached yet. This helper fetches children on
+        demand and caches the results in ``info_cache`` so that later path
+        building does not need extra requests.
+        """
+
+        ids: set[str] = set()
+        stack = [doc_id]
+        while stack:
+            cur = stack.pop()
+            if cur in ids:
+                continue
+            ids.add(cur)
+            info = get_info(cur)
+            coll_id = info.get("collectionId")
+            if not coll_id:
+                continue
+            children = fetch_all_concurrent(
+                base,
+                token,
+                "/documents.list",
+                params={"collectionId": coll_id, "parentDocumentId": cur},
+                workers=args.workers,
+                desc=None,
+            )
+            for ch in children:
+                cid = ch.get("id")
+                if cid and cid not in ids:
+                    info_cache.setdefault(cid, ch)
+                    stack.append(cid)
+        return ids
+
+    expanded = set()
+    for did in doc_ids:
+        expanded.update(gather_descendants(did))
+    doc_ids = list(expanded)
+
+    # include documents from selected collections
+    collections = list_collections(
+        base,
+        token,
+        use_cache=True,
+        refresh_cache=True,
+        workers=args.workers,
+    )
+    cols_by_id = {c.get("id"): c for c in collections}
+    all_ids = set(doc_ids)
+    for cid in col_ids:
+        docs = list_documents_in_collection(
+            base,
+            token,
+            cid,
+            use_cache=True,
+            refresh_cache=True,
+            workers=args.workers,
+        )
+        for d in docs:
+            did = d.get("id")
+            if did:
+                all_ids.add(did)
+                info_cache.setdefault(did, d)
+
+    if not all_ids:
+        print("Ничего не выбрано для экспорта")
+        return
+
+    ext = "md"
 
     def build_path(doc_id: str) -> Path:
         info = get_info(doc_id)

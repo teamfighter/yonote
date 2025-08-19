@@ -1,4 +1,9 @@
-"""Interactive helpers using InquirerPy."""
+"""Interactive helpers using InquirerPy.
+
+The functions below provide text based navigation for collections and
+documents.  They are intentionally verbose and contain many inline comments
+so that the behaviour is easy to follow and maintain.
+"""
 
 from __future__ import annotations
 
@@ -7,8 +12,8 @@ import sys
 
 from .cache import (
     list_collections,
-    list_documents_in_collection,
     refresh_document_branch,
+    load_cache,
 )
 
 try:
@@ -20,7 +25,7 @@ except Exception:  # pragma: no cover - optional dependency
 
 
 def _execute(prompt):
-    """Execute a prompt and handle Ctrl-C gracefully."""
+    """Execute a prompt and handle ``Ctrl-C`` gracefully."""
     try:
         return prompt.execute()
     except KeyboardInterrupt:
@@ -29,6 +34,8 @@ def _execute(prompt):
 
 
 def _build_breadcrumbs(doc: dict, by_id: Dict[str, dict]) -> str:
+    """Return a human readable path for ``doc`` using ``title`` fields."""
+
     parts = [doc.get("title") or "(untitled)"]
     seen = set()
     cur = doc
@@ -46,9 +53,19 @@ def _build_breadcrumbs(doc: dict, by_id: Dict[str, dict]) -> str:
 
 
 def interactive_select_documents(docs: List[dict], multiselect: bool = True) -> List[str]:
+    """Interactively select documents and return their IDs.
+
+    ``multiselect`` controls whether multiple documents can be chosen.
+    ``InquirerPy`` is optional so we guard against it being missing.
+    """
+
     if not HAVE_INQUIRER:
-        print("Interactive mode requires InquirerPy. Install:\n  pip install InquirerPy", file=sys.stderr)
+        print(
+            "Interactive mode requires InquirerPy. Install:\n  pip install InquirerPy",
+            file=sys.stderr,
+        )
         sys.exit(2)
+
     by_id = {d.get("id"): d for d in docs}
     choices = []
     for d in docs:
@@ -56,6 +73,7 @@ def interactive_select_documents(docs: List[dict], multiselect: bool = True) -> 
         label = f"{bc}  [{d.get('id')}]"
         choices.append({"name": label, "value": d.get("id")})
     choices.sort(key=lambda x: x["name"].lower())
+
     if multiselect:
         prompt = inquirer.checkbox(
             message="Выберите документы (Space — выбрать, Enter — подтвердить):",
@@ -74,25 +92,35 @@ def interactive_select_documents(docs: List[dict], multiselect: bool = True) -> 
         )
         result = _execute(prompt)
         return list(result or [])
-    else:
-        prompt = inquirer.select(
-            message="Выберите документ:",
-            choices=choices,
-            instruction="↑/↓, Ctrl+S поиск, Enter",
-            height="90%",
-            keybindings={
-                "search": [{"key": "c-s"}],
-                "search-next": [{"key": "enter"}],
-            },
-        )
-        result = _execute(prompt)
-        return [result] if result else []
+
+    prompt = inquirer.select(
+        message="Выберите документ:",
+        choices=choices,
+        instruction="↑/↓, Ctrl+S поиск, Enter",
+        height="90%",
+        keybindings={
+            "search": [{"key": "c-s"}],
+            "search-next": [{"key": "enter"}],
+        },
+    )
+    result = _execute(prompt)
+    return [result] if result else []
 
 
 def interactive_pick_parent(docs: List[dict], allow_none: bool = True) -> Optional[str]:
+    """Select a parent document from ``docs``.
+
+    Used by non-interactive import mode where a simple list selection is
+    sufficient.  ``allow_none`` adds an option to import into collection root.
+    """
+
     if not HAVE_INQUIRER:
-        print("Interactive mode requires InquirerPy. Install:\n  pip install InquirerPy", file=sys.stderr)
+        print(
+            "Interactive mode requires InquirerPy. Install:\n  pip install InquirerPy",
+            file=sys.stderr,
+        )
         sys.exit(2)
+
     by_id = {d.get("id"): d for d in docs}
     choices = []
     if allow_none:
@@ -102,6 +130,7 @@ def interactive_pick_parent(docs: List[dict], allow_none: bool = True) -> Option
         label = f"{bc}  [{d.get('id')}]"
         choices.append({"name": label, "value": d.get("id")})
     choices.sort(key=lambda x: (x["name"] or "").lower())
+
     prompt = inquirer.select(
         message="Куда импортировать (родительский документ)?",
         choices=choices,
@@ -123,7 +152,12 @@ def interactive_browse_for_export(
     workers: int,
     refresh_cache: bool,
 ) -> tuple[List[str], List[str]]:
-    """Return lists of selected document IDs and collection IDs."""
+    """Return lists of selected document IDs and collection IDs.
+
+    The user can browse collections and documents similar to a file manager
+    and toggle items with the space bar.  Only the portions of the tree that
+    are viewed are fetched from the API which keeps startup fast.
+    """
     if not HAVE_INQUIRER:
         print(
             "Interactive mode requires InquirerPy. Install:\n  pip install InquirerPy",
@@ -132,7 +166,12 @@ def interactive_browse_for_export(
         sys.exit(2)
     print("Загрузка списка коллекций...", file=sys.stderr)
     collections = list_collections(
-        base, token, use_cache=True, refresh_cache=refresh_cache, workers=workers
+        base,
+        token,
+        use_cache=True,
+        refresh_cache=refresh_cache,
+        workers=workers,
+        desc=None,
     )
     cols_by_id = {c.get("id"): c for c in collections}
     selected_docs: set[str] = set()
@@ -140,17 +179,29 @@ def interactive_browse_for_export(
 
     def browse_collection(coll: dict) -> Optional[str]:
         coll_id = coll.get("id")
-        docs = list_documents_in_collection(
-            base,
-            token,
-            coll_id,
-            use_cache=True,
-            refresh_cache=refresh_cache,
-            workers=workers,
-        )
+        cache = load_cache()
+        coll_key = f"collection:{coll_id}"
+        docs = list(cache.get(coll_key, []))
         children: Dict[Optional[str], List[dict]] = {}
         for d in docs:
             children.setdefault(d.get("parentDocumentId"), []).append(d)
+
+        def load_children(pid: Optional[str]) -> None:
+            nonlocal docs, children
+            docs = refresh_document_branch(
+                base,
+                token,
+                coll_id,
+                pid,
+                workers=workers,
+                desc=None,
+            )
+            children = {}
+            for d in docs:
+                children.setdefault(d.get("parentDocumentId"), []).append(d)
+
+        if refresh_cache or not docs:
+            load_children(None)
 
         def toggle_descendants(doc_id: str) -> None:
             stack = [doc_id]
@@ -178,14 +229,7 @@ def interactive_browse_for_export(
                             "value": "__toggle_coll",
                         }
                     )
-                else:
-                    mark = "[x]" if current.get("id") in selected_docs else "[ ]"
-                    choices.append(
-                        {
-                            "name": f"{mark} Экспортировать этот документ",
-                            "value": "__toggle_doc",
-                        }
-                    )
+                # option for exporting the current document removed to avoid confusion
                 for d in children.get(parent_id, []):
                     did = d.get("id")
                     has_children = did in children
@@ -216,7 +260,7 @@ def interactive_browse_for_export(
                     message=path,
                     choices=choices,
                     default=default_val,
-                    instruction="↑/↓, PgUp/PgDn, Space: выбрать, Ctrl+R обновить, Enter, Ctrl+S поиск",
+                    instruction="↑/↓, PgUp/PgDn, Space: выбрать, Ctrl+R обновить, Ctrl+S поиск, Enter",
                     height="90%",
                     keybindings={
                         "pageup": [{"key": "pageup"}],
@@ -224,7 +268,6 @@ def interactive_browse_for_export(
                         "toggle-doc": [{"key": "space"}],
                         "refresh": [{"key": "c-r"}],
                         "search": [{"key": "c-s"}],
-                        "search-next": [{"key": "enter"}],
                     },
                 )
 
@@ -258,6 +301,7 @@ def interactive_browse_for_export(
                         coll_id,
                         parent_id,
                         workers=workers,
+                        desc=None,
                     )
                     children = {}
                     for d in docs:
@@ -267,20 +311,10 @@ def interactive_browse_for_export(
                 def _search(event) -> None:
                     search["default"] = prompt.content_control.selection["value"]
                     if search["query"]:
-                        search["query"] = None
-                        search["index"] = 0
+                        search["index"] += 1
                         event.app.exit(result="__refresh__")
                     else:
                         event.app.exit(result="__search__")
-
-                def _next_or_submit(event) -> None:
-                    if search["query"]:
-                        search["index"] += 1
-                        search["default"] = prompt.content_control.selection["value"]
-                        event.app.exit(result="__refresh__")
-                    else:
-                        val = prompt.content_control.selection["value"]
-                        event.app.exit(result=val)
 
                 prompt.kb_func_lookup.update(
                     {
@@ -289,7 +323,6 @@ def interactive_browse_for_export(
                         "toggle-doc": [{"func": _toggle_doc}],
                         "refresh": [{"func": _refresh}],
                         "search": [{"func": _search}],
-                        "search-next": [{"func": _next_or_submit}],
                     }
                 )
 
@@ -303,20 +336,13 @@ def interactive_browse_for_export(
                 if choice == "__search__":
                     q = _execute(
                         inquirer.text(
-                            message="Поиск:", default=search["query"] or "",
+                            message="Поиск:",
+                            default=search["query"] or "",
+                            keybindings={"submit": [{"key": "c-s"}]},
                         )
                     )
-                    if q:
-                        if q == search["query"]:
-                            search["index"] += 1
-                        else:
-                            search["query"] = q
-                            search["index"] = 0
-                    elif search["query"]:
-                        search["index"] += 1
-                    else:
-                        search["query"] = None
-                        search["index"] = 0
+                    search["query"] = q or None
+                    search["index"] = 0
                     continue
                 if choice == "__toggle_coll":
                     if coll_id in selected_cols:
@@ -324,19 +350,17 @@ def interactive_browse_for_export(
                     else:
                         selected_cols.add(coll_id)
                     continue
-                if choice == "__toggle_doc" and current is not None:
-                    did = current.get("id")
-                    toggle_descendants(did)
-                    continue
                 typ, doc = choice
-                title = doc.get("title") or "(без названия)"
-                did = doc.get("id")
-                if did in children:
-                    res = browse(did, f"{path}/{title}", doc)
-                    if res == "done":
-                        return "done"
-                else:
-                    toggle_descendants(did)
+                if typ == "doc":
+                    title = doc.get("title") or "(без названия)"
+                    did = doc.get("id")
+                    load_children(did)
+                    if did in children:
+                        res = browse(did, f"{path}/{title}", doc)
+                        if res == "done":
+                            return "done"
+                    else:
+                        toggle_descendants(did)
 
         return browse(None, coll.get("name") or "(без названия)", None)
 
@@ -370,7 +394,6 @@ def interactive_browse_for_export(
                 "pagedown": [{"key": "pagedown"}],
                 "refresh": [{"key": "c-r"}],
                 "search": [{"key": "c-s"}],
-                "search-next": [{"key": "enter"}],
             },
         )
 
@@ -395,26 +418,17 @@ def interactive_browse_for_export(
                 use_cache=True,
                 refresh_cache=True,
                 workers=workers,
+                desc=None,
             )
             event.app.exit(result="__refresh__")
 
         def _search(event) -> None:
             search["default"] = prompt.content_control.selection["value"]
             if search["query"]:
-                search["query"] = None
-                search["index"] = 0
+                search["index"] += 1
                 event.app.exit(result="__refresh__")
             else:
                 event.app.exit(result="__search__")
-
-        def _next_or_submit(event) -> None:
-            if search["query"]:
-                search["index"] += 1
-                search["default"] = prompt.content_control.selection["value"]
-                event.app.exit(result="__refresh__")
-            else:
-                val = prompt.content_control.selection["value"]
-                event.app.exit(result=val)
 
         prompt.kb_func_lookup.update(
             {
@@ -422,7 +436,6 @@ def interactive_browse_for_export(
                 "pagedown": [{"func": _page_down}],
                 "refresh": [{"func": _refresh}],
                 "search": [{"func": _search}],
-                "search-next": [{"func": _next_or_submit}],
             }
         )
 
@@ -431,19 +444,14 @@ def interactive_browse_for_export(
             continue
         if choice == "__search__":
             q = _execute(
-                inquirer.text(message="Поиск:", default=search["query"] or "")
+                inquirer.text(
+                    message="Поиск:",
+                    default=search["query"] or "",
+                    keybindings={"submit": [{"key": "c-s"}]},
+                )
             )
-            if q:
-                if q == search["query"]:
-                    search["index"] += 1
-                else:
-                    search["query"] = q
-                    search["index"] = 0
-            elif search["query"]:
-                search["index"] += 1
-            else:
-                search["query"] = None
-                search["index"] = 0
+            search["query"] = q or None
+            search["index"] = 0
             continue
         if choice == "__done":
             break
@@ -462,7 +470,8 @@ def interactive_pick_destination(
     workers: int,
     refresh_cache: bool,
 ) -> Tuple[str, Optional[str], str]:
-    """Return ``(collection_id, parent_doc_id, label)`` for import."""
+    """Interactively pick collection and optional parent document for import."""
+
     if not HAVE_INQUIRER:
         print(
             "Interactive mode requires InquirerPy. Install:\n  pip install InquirerPy",
@@ -470,67 +479,81 @@ def interactive_pick_destination(
         )
         sys.exit(2)
 
+    # Inform the user that API data is being fetched.  Without this the
+    # terminal would appear frozen on slow connections.
+    print("Загрузка списка коллекций...", file=sys.stderr)
+
     collections = list_collections(
-        base, token, use_cache=True, refresh_cache=refresh_cache, workers=workers
+        base,
+        token,
+        use_cache=True,
+        refresh_cache=refresh_cache,
+        workers=workers,
+        desc=None,
     )
 
     def browse_collection(coll: dict) -> Tuple[str, Optional[str], str] | None:
         coll_id = coll.get("id")
-        docs = list_documents_in_collection(
-            base,
-            token,
-            coll_id,
-            use_cache=True,
-            refresh_cache=refresh_cache,
-            workers=workers,
-        )
-
+        cache = load_cache()
+        coll_key = f"collection:{coll_id}"
+        docs = list(cache.get(coll_key, []))
         children: Dict[Optional[str], List[dict]] = {}
         for d in docs:
             children.setdefault(d.get("parentDocumentId"), []).append(d)
 
-        def browse(parent_id: Optional[str], path: str) -> Tuple[str, Optional[str], str] | None:
+        def load_children(pid: Optional[str]) -> None:
+            nonlocal docs, children
+            docs = refresh_document_branch(
+                base,
+                token,
+                coll_id,
+                pid,
+                workers=workers,
+                desc=None,
+            )
+            children = {}
+            for d in docs:
+                children.setdefault(d.get("parentDocumentId"), []).append(d)
+
+        if refresh_cache or not docs:
+            load_children(None)
+
+        selected: Optional[str] = None  # "__root" or document id
+        selected_label: str = coll.get("name") or "(без названия)"
+        def browse(parent_id: Optional[str], path: str, current: Optional[dict]) -> Tuple[str, Optional[str], str] | None:
+            nonlocal selected, selected_label, docs, children
             search: Dict[str, Optional[object]] = {"query": None, "index": 0, "default": None}
 
             def build_choices() -> List[dict]:
                 choices: List[dict] = [{"name": "..", "value": "__up"}]
-                if parent_id is None:
+                if current is None:
+                    # Allow selecting the collection root as a destination.
+                    mark = "[x]" if selected == "__root" else "[ ]"
                     choices.append(
-                        {
-                            "name": "Импортировать в корень коллекции",
-                            "value": "__choose__",
-                        }
-                    )
-                else:
-                    choices.append(
-                        {
-                            "name": "Импортировать сюда",
-                            "value": "__choose__",
-                        }
+                        {"name": f"{mark} Импортировать в корень коллекции", "value": "__sel_root"}
                     )
                 for d in children.get(parent_id, []):
                     did = d.get("id")
+                    has_children = did in children
+                    mark = "[x]" if selected == did else "[ ]"
                     title = d.get("title") or "(без названия)"
-                    suffix = "/" if did in children else ""
-                    choices.append({"name": f"{title}{suffix}", "value": ("doc", d)})
+                    suffix = "/" if has_children else ""
+                    choices.append({"name": f"{mark} {title}{suffix}", "value": ("doc", d)})
+                choices.append({"name": "<Готово>", "value": "__done"})
                 return choices
 
             while True:
                 choices = build_choices()
                 default_val = search.pop("default", None)
                 if search["query"]:
-                    matches = [
-                        c["value"]
-                        for c in choices
-                        if search["query"].lower() in c["name"].lower()
-                    ]
+                    matches = [c["value"] for c in choices if search["query"].lower() in c["name"].lower()]
                     if matches:
                         default_val = matches[search["index"] % len(matches)]
                 prompt = ListPrompt(
                     message=path,
                     choices=choices,
                     default=default_val,
-                    instruction="↑/↓, PgUp/PgDn, Space: выбрать, Ctrl+R обновить, Enter, Ctrl+S поиск",
+                    instruction="↑/↓, PgUp/PgDn, Space выбрать, Ctrl+R обновить, Ctrl+S поиск, Enter",
                     height="90%",
                     keybindings={
                         "pageup": [{"key": "pageup"}],
@@ -538,15 +561,13 @@ def interactive_pick_destination(
                         "choose": [{"key": "space"}],
                         "refresh": [{"key": "c-r"}],
                         "search": [{"key": "c-s"}],
-                        "search-next": [{"key": "enter"}],
                     },
                 )
 
                 def _page(step: int) -> None:
                     cc = prompt.content_control
                     cc.selected_choice_index = max(
-                        0,
-                        min(cc.choice_count - 1, cc.selected_choice_index + step),
+                        0, min(cc.choice_count - 1, cc.selected_choice_index + step)
                     )
 
                 def _page_up(event) -> None:
@@ -554,43 +575,38 @@ def interactive_pick_destination(
 
                 def _page_down(event) -> None:
                     _page(10)
-
                 def _choose(event) -> None:
+                    nonlocal selected, selected_label
                     search["default"] = prompt.content_control.selection["value"]
-                    event.app.exit(result="__choose__")
+                    val = prompt.content_control.selection["value"]
+                    if val == "__sel_root":
+                        target = "__root"
+                        label = coll.get("name") or "(без названия)"
+                    elif isinstance(val, tuple) and val[0] == "doc":
+                        target = val[1].get("id")
+                        label = f"{path}/{val[1].get('title') or '(без названия)'}"
+                    else:
+                        return
+                    if selected == target:
+                        selected = None
+                    else:
+                        selected = target
+                        selected_label = label
+                    event.app.exit(result="__refresh__")
 
                 def _refresh(event) -> None:
                     nonlocal docs, children
                     search["default"] = prompt.content_control.selection["value"]
-                    docs = refresh_document_branch(
-                        base,
-                        token,
-                        coll_id,
-                        parent_id,
-                        workers=workers,
-                    )
-                    children = {}
-                    for d in docs:
-                        children.setdefault(d.get("parentDocumentId"), []).append(d)
+                    load_children(parent_id)
                     event.app.exit(result="__refresh__")
 
                 def _search(event) -> None:
                     search["default"] = prompt.content_control.selection["value"]
                     if search["query"]:
-                        search["query"] = None
-                        search["index"] = 0
+                        search["index"] += 1
                         event.app.exit(result="__refresh__")
                     else:
                         event.app.exit(result="__search__")
-
-                def _next_or_submit(event) -> None:
-                    if search["query"]:
-                        search["index"] += 1
-                        search["default"] = prompt.content_control.selection["value"]
-                        event.app.exit(result="__refresh__")
-                    else:
-                        val = prompt.content_control.selection["value"]
-                        event.app.exit(result=val)
 
                 prompt.kb_func_lookup.update(
                     {
@@ -599,7 +615,6 @@ def interactive_pick_destination(
                         "choose": [{"func": _choose}],
                         "refresh": [{"func": _refresh}],
                         "search": [{"func": _search}],
-                        "search-next": [{"func": _next_or_submit}],
                     }
                 )
 
@@ -611,36 +626,34 @@ def interactive_pick_destination(
                 if choice == "__search__":
                     q = _execute(
                         inquirer.text(
-                            message="Поиск:", default=search["query"] or "",
+                            message="Поиск:",
+                            default=search["query"] or "",
+                            keybindings={"submit": [{"key": "c-s"}]},
                         )
                     )
-                    if q:
-                        if q == search["query"]:
-                            search["index"] += 1
-                        else:
-                            search["query"] = q
-                            search["index"] = 0
-                    elif search["query"]:
-                        search["index"] += 1
-                    else:
-                        search["query"] = None
-                        search["index"] = 0
+                    search["query"] = q or None
+                    search["index"] = 0
                     continue
-                if choice == "__choose__":
-                    label = path if parent_id is None else f"{path}"
-                    return (coll_id, parent_id, label)
-                typ, obj = choice
-                did = obj.get("id")
-                title = obj.get("title") or "(без названия)"
-                if did in children:
-                    res = browse(did, f"{path}/{title}")
-                    if res:
-                        return res
-                else:
-                    # leaf node selected via Enter behaves like choose
-                    return (coll_id, did, f"{path}/{title}")
+                if choice == "__done":
+                    if selected is None:
+                        continue
+                    if selected == "__root":
+                        return coll_id, None, coll.get("name") or "(без названия)"
+                    return coll_id, selected, selected_label
+                if choice == "__sel_root":
+                    continue
+                typ, doc = choice
+                if typ == "doc":
+                    did = doc.get("id")
+                    title = doc.get("title") or "(без названия)"
+                    load_children(did)
+                    if did in children:
+                        res = browse(did, f"{path}/{title}", doc)
+                        if res:
+                            return res
+                    # if no children, do nothing
 
-        return browse(None, coll.get("name") or "(без названия)")
+        return browse(None, coll.get("name") or "(без названия)", None)
 
     search: Dict[str, Optional[object]] = {"query": None, "index": 0, "default": None}
     while True:
@@ -668,7 +681,6 @@ def interactive_pick_destination(
                 "pagedown": [{"key": "pagedown"}],
                 "refresh": [{"key": "c-r"}],
                 "search": [{"key": "c-s"}],
-                "search-next": [{"key": "enter"}],
             },
         )
 
@@ -683,7 +695,6 @@ def interactive_pick_destination(
 
         def _page_down(event) -> None:
             _page(10)
-
         def _refresh(event) -> None:
             nonlocal collections
             search["default"] = prompt.content_control.selection["value"]
@@ -693,26 +704,17 @@ def interactive_pick_destination(
                 use_cache=True,
                 refresh_cache=True,
                 workers=workers,
+                desc=None,
             )
             event.app.exit(result="__refresh__")
 
         def _search(event) -> None:
             search["default"] = prompt.content_control.selection["value"]
             if search["query"]:
-                search["query"] = None
-                search["index"] = 0
+                search["index"] += 1
                 event.app.exit(result="__refresh__")
             else:
                 event.app.exit(result="__search__")
-
-        def _next_or_submit(event) -> None:
-            if search["query"]:
-                search["index"] += 1
-                search["default"] = prompt.content_control.selection["value"]
-                event.app.exit(result="__refresh__")
-            else:
-                val = prompt.content_control.selection["value"]
-                event.app.exit(result=val)
 
         prompt.kb_func_lookup.update(
             {
@@ -720,7 +722,6 @@ def interactive_pick_destination(
                 "pagedown": [{"func": _page_down}],
                 "refresh": [{"func": _refresh}],
                 "search": [{"func": _search}],
-                "search-next": [{"func": _next_or_submit}],
             }
         )
 
@@ -729,19 +730,14 @@ def interactive_pick_destination(
             continue
         if coll == "__search__":
             q = _execute(
-                inquirer.text(message="Поиск:", default=search["query"] or "")
+                inquirer.text(
+                    message="Поиск:",
+                    default=search["query"] or "",
+                    keybindings={"submit": [{"key": "c-s"}]},
+                )
             )
-            if q:
-                if q == search["query"]:
-                    search["index"] += 1
-                else:
-                    search["query"] = q
-                    search["index"] = 0
-            elif search["query"]:
-                search["index"] += 1
-            else:
-                search["query"] = None
-                search["index"] = 0
+            search["query"] = q or None
+            search["index"] = 0
             continue
         if not coll:
             continue
