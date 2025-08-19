@@ -338,7 +338,7 @@ def interactive_browse_for_export(
                         inquirer.text(
                             message="Поиск:",
                             default=search["query"] or "",
-                            keybindings={"submit": [{"key": "c-s"}]},
+                            keybindings={"answer": [{"key": "c-s"}]},
                         )
                     )
                     search["query"] = q or None
@@ -447,7 +447,7 @@ def interactive_browse_for_export(
                 inquirer.text(
                     message="Поиск:",
                     default=search["query"] or "",
-                    keybindings={"submit": [{"key": "c-s"}]},
+                    keybindings={"answer": [{"key": "c-s"}]},
                 )
             )
             search["query"] = q or None
@@ -628,7 +628,7 @@ def interactive_pick_destination(
                         inquirer.text(
                             message="Поиск:",
                             default=search["query"] or "",
-                            keybindings={"submit": [{"key": "c-s"}]},
+                            keybindings={"answer": [{"key": "c-s"}]},
                         )
                     )
                     search["query"] = q or None
@@ -733,7 +733,7 @@ def interactive_pick_destination(
                 inquirer.text(
                     message="Поиск:",
                     default=search["query"] or "",
-                    keybindings={"submit": [{"key": "c-s"}]},
+                    keybindings={"answer": [{"key": "c-s"}]},
                 )
             )
             search["query"] = q or None
