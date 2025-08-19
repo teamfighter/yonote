@@ -3,67 +3,85 @@
 from __future__ import annotations
 
 import json
+import uuid
 import sys
 from typing import Any, Dict
-
-import requests
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
 
 def http_json(method: str, url: str, token: str, payload: Dict[str, Any] | None = None) -> Dict[str, Any] | bytes:
     headers = {"Accept": "application/json", "Authorization": f"Bearer {token}"}
+    data = None
+    if payload is not None:
+        headers["Content-Type"] = "application/json"
+        data = json.dumps(payload).encode("utf-8")
+    req = Request(url=url, method=method.upper(), headers=headers, data=data)
     try:
-        # Using a global ``requests.Session`` can lead to deadlocks when these
-        # helpers are used from multiple threads.  The export command fetches
-        # many documents concurrently, so we issue standalone requests instead
-        # of sharing a session which is not thread-safe.
-        resp = requests.request(
-            method.upper(),
-            url,
-            json=payload,
-            headers=headers,
-            timeout=60,
-        )
-        resp.raise_for_status()
-        ctype = (resp.headers.get("Content-Type") or "").lower()
-        if "application/json" in ctype:
-            try:
-                return resp.json()
-            except Exception:
-                return resp.content
-        return resp.content
-    except requests.HTTPError as e:
-        body = e.response.text if e.response is not None else ""
-        print(f"[HTTP {e.response.status_code if e.response else '??'}] {body}", file=sys.stderr)
+        with urlopen(req, timeout=60) as resp:
+            ctype = (resp.headers.get("Content-Type") or "").lower()
+            raw = resp.read()
+            if "application/json" in ctype:
+                try:
+                    return json.loads(raw.decode("utf-8"))
+                except Exception:
+                    return raw
+            return raw
+    except HTTPError as e:
+        body = e.read().decode("utf-8", errors="ignore")
+        print(f"[HTTP {e.code}] {body}", file=sys.stderr)
         sys.exit(2)
-    except requests.RequestException as e:
-        print(f"Network error: {e}", file=sys.stderr)
+    except URLError as e:
+        print(f"Network error: {e.reason}", file=sys.stderr)
         sys.exit(2)
 
 
 def http_multipart_post(url: str, token: str, fields: Dict[str, object]) -> Dict[str, Any] | bytes:
-    data: Dict[str, Any] = {}
-    files: Dict[str, Any] = {}
+    boundary = f"----yonotecli{uuid.uuid4().hex}"
+
+    def to_b(x):
+        return x if isinstance(x, (bytes, bytearray)) else str(x).encode("utf-8")
+
+    parts: list[bytes] = []
     for name, value in (fields or {}).items():
+        parts.append(f"--{boundary}\r\n".encode())
         if isinstance(value, tuple):
             filename, content, ctype = value
-            files[name] = (filename, content, ctype)
+            if ctype is None:
+                import mimetypes
+                ctype = mimetypes.guess_type(filename)[0] or "application/octet-stream"
+            parts.append(f'Content-Disposition: form-data; name="{name}"; filename="{filename}"\r\n'.encode())
+            parts.append(f"Content-Type: {ctype}\r\n\r\n".encode())
+            parts.append(to_b(content))
+            parts.append(b"\r\n")
         else:
-            data[name] = value
-    headers = {"Accept": "application/json", "Authorization": f"Bearer {token}"}
+            parts.append(f'Content-Disposition: form-data; name="{name}"\r\n\r\n'.encode())
+            parts.append(to_b(value))
+            parts.append(b"\r\n")
+    parts.append(f"--{boundary}--\r\n".encode())
+    body = b"".join(parts)
+
+    headers = {
+        "Accept": "application/json",
+        "Authorization": f"Bearer {token}",
+        "Content-Type": f"multipart/form-data; boundary={boundary}",
+    }
+    req = Request(url=url, method="POST", headers=headers, data=body)
     try:
-        resp = requests.post(url, headers=headers, data=data, files=files, timeout=120)
-        resp.raise_for_status()
-        ctype = (resp.headers.get("Content-Type") or "").lower()
-        if "application/json" in ctype:
-            try:
-                return resp.json()
-            except Exception:
-                return resp.content
-        return resp.content
-    except requests.HTTPError as e:
-        body = e.response.text if e.response is not None else ""
-        print(f"[HTTP {e.response.status_code if e.response else '??'}] {body}", file=sys.stderr)
+        with urlopen(req, timeout=120) as resp:
+            ctype = (resp.headers.get("Content-Type") or "").lower()
+            raw = resp.read()
+            if "application/json" in ctype:
+                try:
+                    return json.loads(raw.decode("utf-8"))
+                except Exception:
+                    return raw
+            return raw
+    except HTTPError as e:
+        body = e.read().decode("utf-8", errors="ignore")
+        print(f"[HTTP {e.code}] {body}", file=sys.stderr)
         sys.exit(2)
-    except requests.RequestException as e:
-        print(f"Network error: {e}", file=sys.stderr)
+    except URLError as e:
+        print(f"Network error: {e.reason}", file=sys.stderr)
         sys.exit(2)
+
