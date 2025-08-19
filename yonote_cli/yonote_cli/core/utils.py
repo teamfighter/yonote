@@ -38,19 +38,12 @@ __all__ = [
 
 
 
-def _post_page(
-    base: str,
-    token: str,
-    path: str,
-    params: Dict[str, Any],
-    limit: int,
-    offset: int | None,
-) -> Dict[str, Any]:
+def _post_page(base: str, token: str, path: str, params: Dict[str, Any], limit: int, offset: int) -> Dict[str, Any]:
+    """POST a single paginated request and return the JSON payload."""
     if limit > API_MAX_LIMIT:
         limit = API_MAX_LIMIT
     payload = dict(params or {})
-    if offset is not None:
-        payload.update({"limit": limit, "offset": offset})
+    payload.update({"limit": limit, "offset": offset})
 
     if path.startswith("http://") or path.startswith("https://"):
         url = path
@@ -87,50 +80,23 @@ def fetch_all_concurrent(
     first = _post_page(base, token, path, params, limit, 0)
     items = list(first.get("data") or [])
     n_first = len(items)
-    pagination = first.get("pagination") or {}
-    next_path = pagination.get("nextPath")
-    total = pagination.get("total")
 
-    # Fast path: single short page and no explicit next link
-    if n_first < limit and not next_path:
+    if n_first < limit:
         with tqdm(total=1, unit="pg", desc=desc) as bar:
             bar.update(1)
         return items
 
+    results: List[dict] = items
+    next_offset = limit
     with tqdm(total=None, unit="pg", desc=desc) as bar:
         bar.update(1)
-
-        # Sequential path-based pagination when server provides nextPath
-        if next_path:
-            results: List[dict] = items
+        while True:
+            offsets = list(range(next_offset, next_offset + limit * workers, limit))
+            if not offsets:
+                break
+            stop = False
             with ThreadPoolExecutor(max_workers=max(1, workers)) as ex:
-                while next_path:
-                    fut = ex.submit(_post_page, base, token, next_path, None, limit, None)
-                    data = fut.result()
-                    page_items = data.get("data") or []
-                    results.extend(page_items)
-                    bar.update(1)
-                    pagination = data.get("pagination") or {}
-                    next_path = pagination.get("nextPath")
-            return results
-
-        # Fallback to offset-based concurrent fetching
-        results: List[dict] = items
-        next_offset = limit
-        with ThreadPoolExecutor(max_workers=max(1, workers)) as ex:
-            while True:
-                if total is not None and next_offset >= total:
-                    break
-                offsets = list(range(next_offset, next_offset + limit * workers, limit))
-                if total is not None:
-                    offsets = [off for off in offsets if off < total]
-                if not offsets:
-                    break
-                stop = False
-                futures = {
-                    ex.submit(_post_page, base, token, path, params, limit, off): off
-                    for off in offsets
-                }
+                futures = {ex.submit(_post_page, base, token, path, params, limit, off): off for off in offsets}
                 for fut in as_completed(futures):
                     data = fut.result()
                     page_items = data.get("data") or []
@@ -138,15 +104,10 @@ def fetch_all_concurrent(
                     bar.update(1)
                     if len(page_items) < limit:
                         stop = True
-                    if total is None:
-                        pag = data.get("pagination") or {}
-                        t = pag.get("total")
-                        if isinstance(t, int):
-                            total = t
-                next_offset += limit * workers
-                if stop:
-                    break
-        return results
+            next_offset += limit * workers
+            if stop:
+                break
+    return results
 
 
 def format_rows(rows: List[Dict[str, Any]], fields: List[str]) -> None:
