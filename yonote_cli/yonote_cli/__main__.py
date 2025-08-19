@@ -62,7 +62,7 @@ def main(argv=None):
     # unified export
     p_exp = sub.add_parser("export", help="Interactive export of documents/collections")
     p_exp.add_argument("--out-dir", required=True, help="Output directory")
-    p_exp.add_argument("--workers", type=int, default=4, help="Parallel workers")
+    p_exp.add_argument("--workers", type=int, default=20, help="Parallel workers")
     p_exp.add_argument(
         "--format",
         choices=["md", "markdown", "html", "json"],
@@ -84,7 +84,7 @@ def main(argv=None):
     # import
     p_imp = sub.add_parser("import", help="Import Markdown files into Yonote")
     p_imp.add_argument("--src-dir", required=True, help="Directory with .md files")
-    p_imp.add_argument("--workers", type=int, default=4, help="Parallel workers")
+    p_imp.add_argument("--workers", type=int, default=20, help="Parallel workers")
     p_imp.add_argument(
         "--refresh-cache",
         action="store_true",

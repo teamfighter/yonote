@@ -70,7 +70,7 @@ def fetch_all_concurrent(
     *,
     params: Dict[str, Any] | None = None,
     limit: int = API_MAX_LIMIT,
-    workers: int = 8,
+    workers: int = 20,
     desc: str = "Loading",
 ) -> List[dict]:
     """Fetch all pages concurrently until a short page is received."""

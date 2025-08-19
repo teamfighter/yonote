@@ -47,7 +47,7 @@ yonote auth set --base-url https://example.yonote.ru --token <JWT>
 ## Экспорт
 
 ```bash
-yonote export --out-dir ./dump --workers 4 --format md
+yonote export --out-dir ./dump --workers 20 --format md
 ```
 
 Команда откроет встроенный браузер для выбора коллекций и документов. Выбранные элементы выгружаются в указанную директорию с сохранением иерархии. Полезные флаги:
@@ -65,7 +65,7 @@ yonote import --src-dir ./dump
 CLI предложит выбрать коллекцию и родительский документ, затем воспроизведёт локальную структуру каталогов в Yonote и опубликует созданные документы. Опции:
 
 - `--refresh-cache` — обновить кэш перед выбором;
-- `--workers N` — максимальное число потоков при создании документов.
+- `--workers N` — максимальное число потоков при создании документов (по умолчанию 20).
 
 ## Встроенный браузер
 
@@ -95,7 +95,7 @@ yonote cache clear  # очистить кэш
 ### Экспорт коллекции в Markdown
 
 ```bash
-yonote export --out-dir ./dump --format md --workers 4
+yonote export --out-dir ./dump --format md --workers 20
 ```
 
 ### Импорт подготовленных файлов
