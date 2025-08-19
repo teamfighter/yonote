@@ -80,18 +80,23 @@ def fetch_all_concurrent(
     first = _post_page(base, token, path, params, limit, 0)
     items = list(first.get("data") or [])
     n_first = len(items)
+    total = first.get("pagination", {}).get("total")
 
-    if n_first < limit:
+    if n_first < limit or (isinstance(total, int) and n_first >= total):
         with tqdm(total=1, unit="pg", desc=desc) as bar:
             bar.update(1)
-        return items
+        return items[: total or None]
 
     results: List[dict] = items
     next_offset = limit
     with tqdm(total=None, unit="pg", desc=desc) as bar:
         bar.update(1)
         while True:
+            if isinstance(total, int) and next_offset >= total:
+                break
             offsets = list(range(next_offset, next_offset + limit * workers, limit))
+            if isinstance(total, int):
+                offsets = [off for off in offsets if off < total]
             if not offsets:
                 break
             stop = False
@@ -104,10 +109,12 @@ def fetch_all_concurrent(
                     bar.update(1)
                     if len(page_items) < limit:
                         stop = True
+                    if isinstance(total, int) and len(results) >= total:
+                        stop = True
             next_offset += limit * workers
             if stop:
                 break
-    return results
+    return results[: total or None]
 
 
 def format_rows(rows: List[Dict[str, Any]], fields: List[str]) -> None:
