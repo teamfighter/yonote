@@ -1,4 +1,9 @@
-"""HTTP helpers for yonote CLI."""
+"""Minimal HTTP helpers for the CLI.
+
+The implementation uses :mod:`urllib` from the Python standard library to
+avoid external dependencies.  Functions are intentionally small and
+well-commented so they can be modified easily if the API changes.
+"""
 
 from __future__ import annotations
 
@@ -10,10 +15,18 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 
-def http_json(method: str, url: str, token: str, payload: Dict[str, Any] | None = None) -> Dict[str, Any] | bytes:
+def http_json(
+    method: str,
+    url: str,
+    token: str,
+    payload: Dict[str, Any] | None = None,
+) -> Dict[str, Any] | bytes:
+    """Perform an HTTP request and return parsed JSON or raw bytes."""
+
     headers = {"Accept": "application/json", "Authorization": f"Bearer {token}"}
     data = None
     if payload is not None:
+        # JSON body for POST/PUT requests
         headers["Content-Type"] = "application/json"
         data = json.dumps(payload).encode("utf-8")
     req = Request(url=url, method=method.upper(), headers=headers, data=data)
@@ -25,6 +38,7 @@ def http_json(method: str, url: str, token: str, payload: Dict[str, Any] | None 
                 try:
                     return json.loads(raw.decode("utf-8"))
                 except Exception:
+                    # Return raw bytes if the body is not valid JSON
                     return raw
             return raw
     except HTTPError as e:
@@ -37,6 +51,12 @@ def http_json(method: str, url: str, token: str, payload: Dict[str, Any] | None 
 
 
 def http_multipart_post(url: str, token: str, fields: Dict[str, object]) -> Dict[str, Any] | bytes:
+    """Send a multipart/form-data POST request.
+
+    ``fields`` is a mapping where each value is either a simple string/bytes or
+    a tuple ``(filename, content, ctype)`` for file uploads.
+    """
+
     boundary = f"----yonotecli{uuid.uuid4().hex}"
 
     def to_b(x):
@@ -50,7 +70,9 @@ def http_multipart_post(url: str, token: str, fields: Dict[str, object]) -> Dict
             if ctype is None:
                 import mimetypes
                 ctype = mimetypes.guess_type(filename)[0] or "application/octet-stream"
-            parts.append(f'Content-Disposition: form-data; name="{name}"; filename="{filename}"\r\n'.encode())
+            parts.append(
+                f'Content-Disposition: form-data; name="{name}"; filename="{filename}"\r\n'.encode()
+            )
             parts.append(f"Content-Type: {ctype}\r\n\r\n".encode())
             parts.append(to_b(content))
             parts.append(b"\r\n")

@@ -1,4 +1,9 @@
-"""Interactive helpers using InquirerPy."""
+"""Interactive helpers using InquirerPy.
+
+The functions below provide text based navigation for collections and
+documents.  They are intentionally verbose and contain many inline comments
+so that the behaviour is easy to follow and maintain.
+"""
 
 from __future__ import annotations
 
@@ -20,7 +25,7 @@ except Exception:  # pragma: no cover - optional dependency
 
 
 def _execute(prompt):
-    """Execute a prompt and handle Ctrl-C gracefully."""
+    """Execute a prompt and handle ``Ctrl-C`` gracefully."""
     try:
         return prompt.execute()
     except KeyboardInterrupt:
@@ -29,6 +34,8 @@ def _execute(prompt):
 
 
 def _build_breadcrumbs(doc: dict, by_id: Dict[str, dict]) -> str:
+    """Return a human readable path for ``doc`` using ``title`` fields."""
+
     parts = [doc.get("title") or "(untitled)"]
     seen = set()
     cur = doc
@@ -46,9 +53,19 @@ def _build_breadcrumbs(doc: dict, by_id: Dict[str, dict]) -> str:
 
 
 def interactive_select_documents(docs: List[dict], multiselect: bool = True) -> List[str]:
+    """Interactively select documents and return their IDs.
+
+    ``multiselect`` controls whether multiple documents can be chosen.
+    ``InquirerPy`` is optional so we guard against it being missing.
+    """
+
     if not HAVE_INQUIRER:
-        print("Interactive mode requires InquirerPy. Install:\n  pip install InquirerPy", file=sys.stderr)
+        print(
+            "Interactive mode requires InquirerPy. Install:\n  pip install InquirerPy",
+            file=sys.stderr,
+        )
         sys.exit(2)
+
     by_id = {d.get("id"): d for d in docs}
     choices = []
     for d in docs:
@@ -56,6 +73,7 @@ def interactive_select_documents(docs: List[dict], multiselect: bool = True) -> 
         label = f"{bc}  [{d.get('id')}]"
         choices.append({"name": label, "value": d.get("id")})
     choices.sort(key=lambda x: x["name"].lower())
+
     if multiselect:
         prompt = inquirer.checkbox(
             message="Выберите документы (Space — выбрать, Enter — подтвердить):",
@@ -74,25 +92,35 @@ def interactive_select_documents(docs: List[dict], multiselect: bool = True) -> 
         )
         result = _execute(prompt)
         return list(result or [])
-    else:
-        prompt = inquirer.select(
-            message="Выберите документ:",
-            choices=choices,
-            instruction="↑/↓, Ctrl+S поиск, Enter",
-            height="90%",
-            keybindings={
-                "search": [{"key": "c-s"}],
-                "search-next": [{"key": "enter"}],
-            },
-        )
-        result = _execute(prompt)
-        return [result] if result else []
+
+    prompt = inquirer.select(
+        message="Выберите документ:",
+        choices=choices,
+        instruction="↑/↓, Ctrl+S поиск, Enter",
+        height="90%",
+        keybindings={
+            "search": [{"key": "c-s"}],
+            "search-next": [{"key": "enter"}],
+        },
+    )
+    result = _execute(prompt)
+    return [result] if result else []
 
 
 def interactive_pick_parent(docs: List[dict], allow_none: bool = True) -> Optional[str]:
+    """Select a parent document from ``docs``.
+
+    Used by non-interactive import mode where a simple list selection is
+    sufficient.  ``allow_none`` adds an option to import into collection root.
+    """
+
     if not HAVE_INQUIRER:
-        print("Interactive mode requires InquirerPy. Install:\n  pip install InquirerPy", file=sys.stderr)
+        print(
+            "Interactive mode requires InquirerPy. Install:\n  pip install InquirerPy",
+            file=sys.stderr,
+        )
         sys.exit(2)
+
     by_id = {d.get("id"): d for d in docs}
     choices = []
     if allow_none:
@@ -102,6 +130,7 @@ def interactive_pick_parent(docs: List[dict], allow_none: bool = True) -> Option
         label = f"{bc}  [{d.get('id')}]"
         choices.append({"name": label, "value": d.get("id")})
     choices.sort(key=lambda x: (x["name"] or "").lower())
+
     prompt = inquirer.select(
         message="Куда импортировать (родительский документ)?",
         choices=choices,
@@ -123,7 +152,12 @@ def interactive_browse_for_export(
     workers: int,
     refresh_cache: bool,
 ) -> tuple[List[str], List[str]]:
-    """Return lists of selected document IDs and collection IDs."""
+    """Return lists of selected document IDs and collection IDs.
+
+    The user can browse collections and documents similar to a file manager
+    and toggle items with the space bar.  Only the portions of the tree that
+    are viewed are fetched from the API which keeps startup fast.
+    """
     if not HAVE_INQUIRER:
         print(
             "Interactive mode requires InquirerPy. Install:\n  pip install InquirerPy",
@@ -483,13 +517,18 @@ def interactive_pick_destination(
     workers: int,
     refresh_cache: bool,
 ) -> Tuple[str, Optional[str], str]:
-    """Return ``(collection_id, parent_doc_id, label)`` for import."""
+    """Interactively pick collection and optional parent document for import."""
+
     if not HAVE_INQUIRER:
         print(
             "Interactive mode requires InquirerPy. Install:\n  pip install InquirerPy",
             file=sys.stderr,
         )
         sys.exit(2)
+
+    # Inform the user that API data is being fetched.  Without this the
+    # terminal would appear frozen on slow connections.
+    print("Загрузка списка коллекций...", file=sys.stderr)
 
     collections = list_collections(
         base,
@@ -535,11 +574,11 @@ def interactive_pick_destination(
             def build_choices() -> List[dict]:
                 choices: List[dict] = [{"name": "..", "value": "__up"}]
                 if current is None:
+                    # Allow selecting the collection root as a destination.
                     mark = "[x]" if selected == "__root" else "[ ]"
-                    choices.append({"name": f"{mark} Импортировать в корень коллекции", "value": "__sel_root"})
-                else:
-                    mark = "[x]" if selected == current.get("id") else "[ ]"
-                    choices.append({"name": f"{mark} Импортировать сюда", "value": "__sel_here"})
+                    choices.append(
+                        {"name": f"{mark} Импортировать в корень коллекции", "value": "__sel_root"}
+                    )
                 for d in children.get(parent_id, []):
                     did = d.get("id")
                     has_children = did in children
@@ -591,9 +630,6 @@ def interactive_pick_destination(
                     if val == "__sel_root":
                         target = "__root"
                         label = coll.get("name") or "(без названия)"
-                    elif val == "__sel_here" and current is not None:
-                        target = current.get("id")
-                        label = path
                     elif isinstance(val, tuple) and val[0] == "doc":
                         target = val[1].get("id")
                         label = f"{path}/{val[1].get('title') or '(без названия)'}"
@@ -666,7 +702,7 @@ def interactive_pick_destination(
                     if selected == "__root":
                         return coll_id, None, coll.get("name") or "(без названия)"
                     return coll_id, selected, selected_label
-                if choice in ("__sel_root", "__sel_here"):
+                if choice == "__sel_root":
                     continue
                 typ, doc = choice
                 if typ == "doc":
