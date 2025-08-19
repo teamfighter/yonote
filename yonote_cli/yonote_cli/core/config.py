@@ -10,8 +10,10 @@ from typing import Any, Dict, Tuple
 
 CONFIG_PATH = Path(os.path.expanduser("~")) / ".yonote.json"
 CACHE_PATH = Path(os.path.expanduser("~")) / ".yonote-cache.json"
-DEFAULT_BASE = "https://practicum.yonote.ru/api"
-API_MAX_LIMIT = 100  # лимит API для limit
+# Default API endpoint used when no base URL is configured
+DEFAULT_BASE = "https://app.yonote.ru/api"
+# API limit for the ``limit`` parameter
+API_MAX_LIMIT = 100
 
 
 def load_config() -> Dict[str, Any]:

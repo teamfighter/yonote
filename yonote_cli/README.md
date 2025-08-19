@@ -1,29 +1,34 @@
-# yonote-tools — CLI для Yonote
+# yonote-tools — CLI for Yonote
 
-Этот пакет содержит утилиту `yonote`. Основное описание, примеры и инструкции находятся в [корневом README](../README.md).
+This package contains the `yonote` utility. The main usage examples and instructions are described in the [root README](../README.md).
 
-## Архитектура
+## Architecture
 
-Пакет разделён на два слоя:
+The package is split into two layers:
 
-* **commands/** – набор подкоманд (`export`, `import`, `collections list` и т.д.).
-  Каждая подкоманда реализована в отдельном файле и использует функции
-  уровня core.
-* **core/** – общие утилиты: работа с HTTP API, кеширование, отображение
-  прогресса и интерактивная навигация по коллекциям и документам.
+* **commands/** – individual subcommands (`auth`, `cache`, `export`, `import`). Each subcommand lives in its own file and relies on helpers from the core layer.
+* **core/** – shared utilities: HTTP API access, caching, progress reporting and the interactive navigation through collections and documents.
 
-Основной модуль `yonote_cli/core/interactive.py` отвечает за работу в
-интерактивном режиме. Он предоставляет функции для выбора коллекций и
-документов, динамически подгружая только нужные ветки дерева из API.
+The central module `yonote_cli/core/interactive.py` implements interactive workflows. It fetches collections and documents lazily from the API and lets the user browse the hierarchy with the keyboard.
 
-## Принцип работы
+## Command reference
 
-1. При запуске команда обращается к API, используя функции из `core/http.py`.
-2. Результаты запросов кешируются на диске (`core/cache.py`), чтобы повторные
-   операции выполнялись быстрее.
-3. Во время экспорта и импорта используется интерактивный браузер. Пользователь
-   навигирует по структуре коллекций с помощью клавиш, а прогресс API-запросов
-   отображается через `tqdm`.
+### `yonote auth set`
+Stores the base URL and API token in `~/.yonote.json`. Both values can also be supplied via environment variables.
 
-Такой подход позволяет обрабатывать большие рабочие области, не загружая сразу
-всю структуру документов.
+### `yonote auth info`
+Prints the current configuration including the resolved base URL and token location.
+
+### `yonote cache info`
+Shows where the cache file is located and basic statistics about stored collections and documents.
+
+### `yonote cache clear`
+Removes `~/.yonote-cache.json` so that subsequent commands fetch fresh metadata from the API.
+
+### `yonote export`
+Interactive export of collections and documents. The command uses the browser from `interactive.py` to select targets, then downloads document content concurrently and writes files to the output directory.
+
+### `yonote import`
+Imports local Markdown files into Yonote. The command prompts for a collection and optional parent document, mirrors the local folder structure, and creates documents in parallel workers.
+
+This layered structure keeps network logic, caching and interactive UI reusable across all commands.

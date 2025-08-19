@@ -3,31 +3,35 @@ openapi: 3.0.0
 info:
   title: Yonote API
   description: |
-    # Введение
+    # Introduction
 
-    Yonote API реализованно в стиле RPC - это позволяет вам взаимодействовать Yonote и управлять данными в базах знаний, так же как основное приложение (потому что оно построенно на том же API).
+    The Yonote API follows an RPC style that lets you interact with Yonote and
+    manage knowledge-base data just like the main application (which is built on
+    the same API).
 
-    Структура API описана с использованием openapi спецификации и доступна по ссылкам: [yml](https://yonote.ru/openapi-3.yml) или [json](https://yonote.ru/openapi-3.json) 
+    The API structure is described with an OpenAPI specification available as
+    [yml](https://yonote.ru/openapi-3.yml) or
+    [json](https://yonote.ru/openapi-3.json).
 
-    # Выполнение запросов
+    # Making requests
 
-    Yonote API следует простым принципам RPC стиля, где каждый API эндпоинт - метод на `https://app.yonote.ru/api/method`. Оба `GET` и `POST` 
-    метода поддерживаются, но мы рекомендуем всегда использовать метод POST.
-    Мы поддерживаем только HTTPS протокол для всех запросов, которые возвращают JSON данные.
+    Each endpoint maps to a method at `https://app.yonote.ru/api/method`.
+    `GET` and `POST` are supported, but we recommend always using `POST`.
+    Requests are served over HTTPS and return JSON data.
 
-    При выполнении `POST` запросов, параметры запроса обрабатываются с учетом переданного **Content-Type** заголовка. Для выполнения запроса с передащей данный в JSON формате, вы должны передать заголовок
-    **Content-Type: application/json**, ниже пример запроса с помощью CURL:
+    For `POST` requests include a **Content-Type** header. To send JSON payloads
+    use **Content-Type: application/json**. Example with CURL:
 
     ```
-    curl https://app.yonote.ru/api/documents.info
-    -X POST
-    -H 'authorization: Bearer MY_API_KEY'
-    -H 'content-type: application/json'
-    -H 'accept: application/json'
-    -d '{"id": "yonote-api-DLSdsdssSD"}'
+    curl https://app.yonote.ru/api/documents.info \
+      -X POST \
+      -H 'authorization: Bearer MY_API_KEY' \
+      -H 'content-type: application/json' \
+      -H 'accept: application/json' \
+      -d '{"id": "yonote-api-DLSdsdssSD"}'
     ```
 
-    Или, с помощью JavaScript:
+    Or with JavaScript:
 
     ```javascript
     const response = await fetch("https://app.yonote.ru/api/documents.info", {
@@ -43,33 +47,38 @@ info:
     const document = body.data;
     ```
 
-    # Авторизация
+    # Authentication
 
-    Для получаения доступа к API необходимо передать валидный API ключ. Вы можете создавать сколько угодно API ключей на [странице настроек](https://app.yonote.ru/settings). 
-    
-    **Внимание: API ключи дают полный доступ к вашим документам, относитесь к ключам - как к паролям!**
-    
-    Чтобы авторизоваться на API, просто передайте API ключ в заголовке 
-    (`Authorization: Bearer YOUR_API_KEY`) или передайте параметр `token=YOUR_API_KEY` как часть запроса. Мы рекомендуем передавать ключ в заголовках.
+    Obtain an API key from the [settings page](https://app.yonote.ru/settings).
 
-    Некоторые методы поддерживают не авторизованный доступ (на пример к публичным ресурсам), их можно запрашивать не передавая API ключ
+    **Warning: API keys grant full access to your documents. Treat them like passwords!**
 
-    # Ошибки
+    Send the key in the `Authorization` header (`Authorization: Bearer YOUR_API_KEY`)
+    or as `token=YOUR_API_KEY` in the request parameters. Headers are preferred.
 
-    Все успешные запросы возвращают статускод 200 или 201 с телом ответа `{"ok": true}`. Если при выполнении запроса произошла ошибка, будет возвращен соответствующий HTTP статус код, а тело ответа будет примерно таким:
+    Some endpoints allow unauthenticated access (for example to public resources)
+    and can be queried without an API key.
+
+    # Errors
+
+    Successful requests return status code 200 or 201 with body `{ "ok": true }`.
+    If an error occurs an appropriate HTTP status code is returned with a body
+    similar to:
 
     ```
     {
       "ok": false,
-      "error: "Not Found"
+      "error": "Not Found"
     }
     ```
 
-    # Пагинация
+    # Pagination
 
-    Большинство API ресурсов поддерживают метод `list`, на пример: users, documents, collections. Все `list` методы поддерживают одинаковые параметры запроса `limit` и `offset`.
+    Most API resources provide a `list` method (e.g. users, documents,
+    collections) that accepts `limit` and `offset` parameters.
 
-    Каждый ответ сервера дополняется данными для пагинации, специальным полем `pagination`. данное поле содержит объект с переданными параметрами limit и offset, а так же дополняется полем `nextPath` - которое можно использовать для выполнения следующего запроса загрузки данных. Пример:
+    Each response includes a `pagination` object containing the supplied
+    parameters and a `nextPath` field for fetching the next page. Example:
 
     ```
     {
@@ -84,11 +93,15 @@ info:
     }
     ```
 
-    # Политики
+    # Policies
 
-    Многие ресурсы API ассоциированны с "политиками" - это объекты, описывающие к чему у конкретного API ключа есть доступ в каждом ресурсе. Надо помнить, что политика "id" - идентична ресурсу, на который данный id ссылается, политики сами по себе не имеют уникальных идентификаторов.
+    Many resources are associated with "policies" describing what an API key can
+    access. A policy's `id` matches the resource it references and policies do
+    not have unique identifiers.
 
-    Для большинства случаев использования API, политики можно игнорировать (это безопасно). Попытка вызова не авторизованного метода вызовет ошибку. В основном, политики нужны основному приложению Yonote, для правильного отображения элементов управления.
+    In most cases you can ignore policies. Calling an unauthorized method results
+    in an error. Policies are mainly used by the Yonote application to render UI
+    controls correctly.
   version: 0.1.0
   contact:
     email: hello@yonote.ru
@@ -497,7 +510,7 @@ paths:
                   description: User password.
                 customButtonName:
                   type: string
-                  description: Сustom login button name.
+                  description: Custom login button name.
                 filter:
                   type: string
                   example: (objectClass=inetOrgPerson)
