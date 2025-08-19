@@ -45,13 +45,12 @@ The configuration is stored in `~/.yonote.json`; document structure cache is sto
 ## Export
 
 ```bash
-yonote export --out-dir ./dump --workers 20 --format md
+yonote export --out-dir ./dump --workers 20
 ```
 
 The command opens an interactive browser to pick collections and documents. Selected items are written to the target directory preserving hierarchy. Useful flags:
 
 - `--refresh-cache` – refresh metadata cache;
-- `--format md|json` – output file format;
 - `--use-ids` – use identifiers in file names.
 
 ## Import
@@ -93,7 +92,7 @@ The `--refresh-cache` flag or `Ctrl+R` shortcut let you refresh only required br
 ### Export a collection to Markdown
 
 ```bash
-yonote export --out-dir ./dump --format md --workers 20
+yonote export --out-dir ./dump --workers 20
 ```
 
 ### Import prepared files

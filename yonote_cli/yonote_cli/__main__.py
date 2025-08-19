@@ -64,12 +64,6 @@ def main(argv=None):
     p_exp.add_argument("--out-dir", required=True, help="Output directory")
     p_exp.add_argument("--workers", type=int, default=20, help="Parallel workers")
     p_exp.add_argument(
-        "--format",
-        choices=["md", "markdown", "html", "json"],
-        default="md",
-        help="Export format (API returns Markdown by default)",
-    )
-    p_exp.add_argument(
         "--use-ids",
         action="store_true",
         help="Name files by document/collection IDs instead of titles",
