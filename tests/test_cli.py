@@ -7,6 +7,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "yonote_cli"))
 import yonote_cli.commands.admin as admin
+import yonote_cli.commands.users as users
+import yonote_cli.commands.groups as groups
+import yonote_cli.commands.collections as collections_cmd
 
 def test_cli_help():
     result = subprocess.run([
@@ -14,7 +17,7 @@ def test_cli_help():
     ], capture_output=True, text=True)
     assert result.returncode == 0
     usage = result.stdout.splitlines()[0]
-    assert "{auth,cache,export,import,admin}" in usage
+    assert "{auth,cache,export,import,users,groups,collections,admin}" in usage
 
 
 def test_admin_users_help():
@@ -96,6 +99,7 @@ def test_admin_users_add(monkeypatch, capsys):
 
     monkeypatch.setattr(admin, "http_json", fake_http_json)
     monkeypatch.setattr(admin, "get_base_and_token", lambda: ("base", "token"))
+    monkeypatch.setattr(admin, "_resolve_user_id", lambda base, token, ident: ident)
 
     args = SimpleNamespace(emails=["a@example.com", "b@example.com"])
     admin.cmd_admin_users_add(args)
@@ -166,3 +170,123 @@ def test_admin_groups_memberships_paginates(monkeypatch, capsys):
     out, _ = capsys.readouterr()
     assert "u2@example.com" in out
     assert offsets[:2] == [0, 1]
+
+
+def test_users_help():
+    result = subprocess.run([
+        "python", "-m", "yonote_cli.yonote_cli", "users", "--help"
+    ], capture_output=True, text=True)
+    assert result.returncode == 0
+    assert "promote" in result.stdout
+
+
+def test_users_list_query(monkeypatch):
+    captured = {}
+
+    def fake_fetch_all(base, token, path, *, params=None, **_):
+        captured["params"] = params
+        return []
+
+    monkeypatch.setattr(admin, "fetch_all_concurrent", fake_fetch_all)
+    monkeypatch.setattr(admin, "get_base_and_token", lambda: ("base", "token"))
+
+    args = SimpleNamespace(query="smith")
+    users.cmd_users_list(args)
+    assert captured["params"] == {"filter": "all", "query": "smith"}
+
+
+def test_users_promote(monkeypatch):
+    calls = []
+
+    def fake_http_json(method, url, token, payload):
+        calls.append((url, payload))
+        return {}
+
+    monkeypatch.setattr(admin, "http_json", fake_http_json)
+    monkeypatch.setattr(admin, "get_base_and_token", lambda: ("base", "token"))
+    monkeypatch.setattr(admin, "_resolve_user_id", lambda base, token, ident: ident)
+    args = SimpleNamespace(users=["u1", "u2"])
+    users.cmd_users_promote(args)
+    assert calls == [
+        ("base/users.promote", {"id": "u1"}),
+        ("base/users.promote", {"id": "u2"}),
+    ]
+
+
+def test_groups_add_remove_user(monkeypatch):
+    calls = []
+
+    def fake_http_json(method, url, token, payload):
+        calls.append((url, payload))
+        return {}
+
+    monkeypatch.setattr(admin, "http_json", fake_http_json)
+    monkeypatch.setattr(admin, "_resolve_group_id", lambda base, token, ident: ident)
+    monkeypatch.setattr(admin, "_resolve_user_id", lambda base, token, ident: ident)
+    monkeypatch.setattr(admin, "get_base_and_token", lambda: ("base", "token"))
+
+    args_add = SimpleNamespace(group="g", user="u")
+    groups.cmd_groups_add_user(args_add)
+    args_remove = SimpleNamespace(group="g", user="u")
+    groups.cmd_groups_remove_user(args_remove)
+
+    assert calls == [
+        ("base/groups.add_user", {"id": "g", "userId": "u"}),
+        ("base/groups.remove_user", {"id": "g", "userId": "u"}),
+    ]
+
+
+def test_groups_memberships_paginates(monkeypatch, capsys):
+    offsets = []
+
+    def fake_http_json(method, url, token, payload):
+        offsets.append(payload["offset"])
+        if payload["offset"] == 0:
+            return {"data": {"users": [{"id": "1", "email": "u1@example.com", "name": "U1"}]}}
+        elif payload["offset"] == 1:
+            return {"data": {"users": [{"id": "2", "email": "u2@example.com", "name": "U2"}]}}
+        else:
+            return {"data": {"users": []}}
+
+    monkeypatch.setattr(admin, "http_json", fake_http_json)
+    monkeypatch.setattr(admin, "_resolve_group_id", lambda base, token, ident: ident)
+    monkeypatch.setattr(admin, "get_base_and_token", lambda: ("base", "token"))
+    monkeypatch.setattr(admin, "API_MAX_LIMIT", 1)
+
+    args = SimpleNamespace(group="g", query=None)
+    groups.cmd_groups_memberships(args)
+    out, _ = capsys.readouterr()
+    assert "u2@example.com" in out
+    assert offsets[:2] == [0, 1]
+
+
+def test_collections_memberships_params(monkeypatch):
+    captured = {}
+
+    def fake_http_json(method, url, token, payload):
+        captured.update(payload)
+        return {"data": {"users": []}}
+
+    monkeypatch.setattr(admin, "http_json", fake_http_json)
+    monkeypatch.setattr(admin, "get_base_and_token", lambda: ("base", "token"))
+
+    args = SimpleNamespace(collection="c", query="q", permission="read")
+    collections_cmd.cmd_collections_memberships(args)
+    assert captured["permission"] == "read"
+    assert captured["query"] == "q"
+
+
+def test_collections_group_memberships_params(monkeypatch):
+    captured = {}
+
+    def fake_http_json(method, url, token, payload):
+        captured.update(payload)
+        return {"data": {"groups": []}}
+
+    monkeypatch.setattr(admin, "http_json", fake_http_json)
+    monkeypatch.setattr(admin, "get_base_and_token", lambda: ("base", "token"))
+
+    args = SimpleNamespace(collection="c", query="gq", permission="maintainer")
+    collections_cmd.cmd_collections_group_memberships(args)
+    assert captured["permission"] == "maintainer"
+    assert captured["query"] == "gq"
