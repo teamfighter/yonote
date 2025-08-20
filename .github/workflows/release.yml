@@ -4,6 +4,9 @@ on:
   release:
     types: [published]
 
+permissions:
+  contents: write
+
 jobs:
   docker:
     name: Docker image
@@ -31,3 +34,19 @@ jobs:
             ```bash
             docker pull ghcr.io/${{ github.repository_owner }}/yonote:${{ github.ref_name }}
             ```
+
+  update-readme:
+    name: Update README
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.repository.default_branch }}
+      - name: Update README with tag
+        run: |
+          latest_tag="${GITHUB_REF#refs/tags/}"
+          sed -i "s/^export YONOTE_VERSION=.*/export YONOTE_VERSION=${latest_tag}/" README.md
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git commit -am "docs: update README for ${latest_tag}" && git push
