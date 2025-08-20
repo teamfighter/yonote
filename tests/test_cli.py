@@ -75,7 +75,7 @@ def test_admin_users_list_pagination(monkeypatch, capsys):
     admin.cmd_admin_users_list(args)
     out, _ = capsys.readouterr()
     assert "a@example.com" in out
-    assert captured["params"] == {}
+    assert captured["params"] == {"filter": "all"}
 
 
 def test_admin_users_list_query(monkeypatch):
@@ -90,7 +90,7 @@ def test_admin_users_list_query(monkeypatch):
 
     args = SimpleNamespace(query="smith")
     admin.cmd_admin_users_list(args)
-    assert captured["params"] == {"query": "smith"}
+    assert captured["params"] == {"filter": "all", "query": "smith"}
 
 
 def test_users_list_query(monkeypatch):
@@ -105,7 +105,26 @@ def test_users_list_query(monkeypatch):
 
     args = SimpleNamespace(query="smith")
     users.cmd_users_list(args)
-    assert captured["params"] == {"query": "smith"}
+    assert captured["params"] == {"filter": "all", "query": "smith"}
+
+
+def test_users_add(monkeypatch, capsys):
+    captured = {}
+
+    def fake_http_json(method, url, token, payload):
+        captured["url"] = url
+        captured["payload"] = payload
+        return {}
+
+    monkeypatch.setattr(users, "http_json", fake_http_json)
+    monkeypatch.setattr(users, "get_base_and_token", lambda: ("base", "token"))
+
+    args = SimpleNamespace(emails=["a@example.com", "b@example.com"])
+    users.cmd_users_add(args)
+    out, _ = capsys.readouterr()
+    assert "invited a@example.com" in out
+    assert captured["url"] == "base/users.invite"
+    assert captured["payload"] == {"emails": ["a@example.com", "b@example.com"]}
 
 
 def test_admin_users_update_promote(monkeypatch):

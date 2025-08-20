@@ -28,6 +28,7 @@ from .users import (
     cmd_users_info,
     cmd_users_update,
     cmd_users_delete,
+    cmd_users_add,
 )
 from .groups import (
     cmd_groups_list,
@@ -75,6 +76,7 @@ __all__ = [
     "cmd_users_info",
     "cmd_users_update",
     "cmd_users_delete",
+    "cmd_users_add",
     "cmd_groups_list",
     "cmd_groups_create",
     "cmd_groups_update",
