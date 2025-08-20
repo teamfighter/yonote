@@ -24,8 +24,10 @@ yonote() {
   fi
 
   docker run --rm -it \
-    -v "$HOME/.yonote.json:/root/.yonote.json" \
-    -v "$HOME/.yonote-cache.json:/root/.yonote-cache.json" \
+    --user "$(id -u):$(id -g)" \
+    -e HOME=/tmp \
+    -v "$HOME/.yonote.json:/tmp/.yonote.json" \
+    -v "$HOME/.yonote-cache.json:/tmp/.yonote-cache.json" \
     -v "$(pwd):/app/work" \
     -w /app/work \
     ghcr.io/teamfighter/yonote:${YONOTE_VERSION:-latest} "$@"
