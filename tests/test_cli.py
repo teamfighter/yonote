@@ -7,14 +7,14 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "yonote_cli"))
 import yonote_cli.commands.admin as admin
-import yonote_cli.commands.users as users
 
 def test_cli_help():
     result = subprocess.run([
         "python", "-m", "yonote_cli.yonote_cli", "--help"
     ], capture_output=True, text=True)
     assert result.returncode == 0
-    assert "Yonote CLI" in result.stdout
+    usage = result.stdout.splitlines()[0]
+    assert "{auth,cache,export,import,admin}" in usage
 
 
 def test_admin_users_help():
@@ -52,14 +52,6 @@ def test_auth_set(tmp_path):
     assert cfg["token"] == "secret"
 
 
-def test_users_help():
-    result = subprocess.run([
-        "python", "-m", "yonote_cli.yonote_cli", "users", "--help"
-    ], capture_output=True, text=True)
-    assert result.returncode == 0
-    assert "list" in result.stdout
-
-
 def test_admin_users_list_pagination(monkeypatch, capsys):
     captured = {}
 
@@ -92,40 +84,6 @@ def test_admin_users_list_query(monkeypatch):
     args = SimpleNamespace(query="smith")
     admin.cmd_admin_users_list(args)
     assert captured["params"] == {"filter": "all", "query": "smith"}
-
-
-def test_users_list_query(monkeypatch):
-    captured = {}
-
-    def fake_fetch_all(base, token, path, *, params=None, **_):
-        captured["params"] = params
-        return []
-
-    monkeypatch.setattr(admin, "fetch_all_concurrent", fake_fetch_all)
-    monkeypatch.setattr(admin, "get_base_and_token", lambda: ("base", "token"))
-
-    args = SimpleNamespace(query="smith")
-    users.cmd_users_list(args)
-    assert captured["params"] == {"filter": "all", "query": "smith"}
-
-
-def test_users_add(monkeypatch, capsys):
-    captured = {}
-
-    def fake_http_json(method, url, token, payload):
-        captured["url"] = url
-        captured["payload"] = payload
-        return {}
-
-    monkeypatch.setattr(users, "http_json", fake_http_json)
-    monkeypatch.setattr(users, "get_base_and_token", lambda: ("base", "token"))
-
-    args = SimpleNamespace(emails=["a@example.com", "b@example.com"])
-    users.cmd_users_add(args)
-    out, _ = capsys.readouterr()
-    assert "invited a@example.com" in out
-    assert captured["url"] == "base/users.invite"
-    assert captured["payload"] == {"emails": ["a@example.com", "b@example.com"]}
 
 
 def test_admin_users_add(monkeypatch, capsys):
