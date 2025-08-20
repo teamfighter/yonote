@@ -226,23 +226,29 @@ def export_document_content(base: str, token: str, doc_id: str) -> str:
                     return None
 
             opener = build_opener(_NoRedirect)
-            for _ in range(6):
+            for _ in range(10):
                 req = Request(url=url, method="POST", headers=headers, data=payload)
                 try:
                     resp = opener.open(req, timeout=60)
                 except HTTPError as e:  # type: ignore[assignment]
                     resp = e
+                except URLError:
+                    time.sleep(2)
+                    continue
                 location = resp.headers.get("Location")
                 body = resp.read()
                 if location:
                     try:
-                        with urlopen(location, timeout=60) as final:
+                        with urlopen(location, timeout=120) as final:
                             return ensure_text(final.read())
                     except HTTPError as e:
                         err_body = e.read().decode("utf-8", errors="ignore")
                         print(f"[HTTP {e.code}] {err_body}", file=sys.stderr)
                         sys.exit(2)
-                time.sleep(1)
+                    except URLError:
+                        time.sleep(2)
+                        continue
+                time.sleep(2)
             raise RuntimeError("export timed out")
 
     return ensure_text(data)
