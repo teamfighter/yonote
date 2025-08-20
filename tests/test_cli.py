@@ -23,6 +23,7 @@ def test_admin_users_help():
     ], capture_output=True, text=True)
     assert result.returncode == 0
     assert "update" in result.stdout
+    assert "add" in result.stdout
     assert "promote" not in result.stdout
 
     upd_help = subprocess.run([
@@ -121,6 +122,25 @@ def test_users_add(monkeypatch, capsys):
 
     args = SimpleNamespace(emails=["a@example.com", "b@example.com"])
     users.cmd_users_add(args)
+    out, _ = capsys.readouterr()
+    assert "invited a@example.com" in out
+    assert captured["url"] == "base/users.invite"
+    assert captured["payload"] == {"emails": ["a@example.com", "b@example.com"]}
+
+
+def test_admin_users_add(monkeypatch, capsys):
+    captured = {}
+
+    def fake_http_json(method, url, token, payload):
+        captured["url"] = url
+        captured["payload"] = payload
+        return {}
+
+    monkeypatch.setattr(admin, "http_json", fake_http_json)
+    monkeypatch.setattr(admin, "get_base_and_token", lambda: ("base", "token"))
+
+    args = SimpleNamespace(emails=["a@example.com", "b@example.com"])
+    admin.cmd_admin_users_add(args)
     out, _ = capsys.readouterr()
     assert "invited a@example.com" in out
     assert captured["url"] == "base/users.invite"

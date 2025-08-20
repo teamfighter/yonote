@@ -93,6 +93,15 @@ def cmd_admin_users_info(args) -> None:
     print(json.dumps(data.get("data"), ensure_ascii=False, indent=2))
 
 
+def cmd_admin_users_add(args) -> None:
+    """Invite one or more users by email."""
+    base, token = get_base_and_token()
+    payload = {"emails": args.emails}
+    http_json("POST", f"{base}/users.invite", token, payload)
+    for email in args.emails:
+        print(f"invited {email}")
+
+
 def cmd_admin_users_update(args) -> None:
     base, token = get_base_and_token()
     updates = {}

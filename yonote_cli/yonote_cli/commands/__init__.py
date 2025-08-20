@@ -7,6 +7,7 @@ from .import_cmd import cmd_import
 from .admin import (
     cmd_admin_users_list,
     cmd_admin_users_info,
+    cmd_admin_users_add,
     cmd_admin_users_update,
     cmd_admin_users_delete,
     cmd_admin_groups_list,
@@ -57,6 +58,7 @@ __all__ = [
     "cmd_import",
     "cmd_admin_users_list",
     "cmd_admin_users_info",
+    "cmd_admin_users_add",
     "cmd_admin_users_update",
     "cmd_admin_users_delete",
     "cmd_admin_groups_list",

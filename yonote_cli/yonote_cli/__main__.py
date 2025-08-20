@@ -21,6 +21,7 @@ try:  # pragma: no cover - exercised indirectly in tests
         cmd_import,
         cmd_admin_users_list,
         cmd_admin_users_info,
+        cmd_admin_users_add,
         cmd_admin_users_update,
         cmd_admin_users_delete,
         cmd_admin_groups_list,
@@ -69,6 +70,7 @@ except ModuleNotFoundError:  # pragma: no cover
         cmd_import,
         cmd_admin_users_list,
         cmd_admin_users_info,
+        cmd_admin_users_add,
         cmd_admin_users_update,
         cmd_admin_users_delete,
         cmd_admin_groups_list,
@@ -262,6 +264,10 @@ def main(argv=None):
     p_admin_users_info = sub_admin_users.add_parser("info", help="Show user info")
     p_admin_users_info.add_argument("user", help="User id or email")
     p_admin_users_info.set_defaults(func=cmd_admin_users_info)
+
+    p_admin_users_add = sub_admin_users.add_parser("add", help="Invite users")
+    p_admin_users_add.add_argument("emails", nargs="+", help="Email addresses")
+    p_admin_users_add.set_defaults(func=cmd_admin_users_add)
 
     p_admin_users_update = sub_admin_users.add_parser("update", help="Update users")
     p_admin_users_update.add_argument("users", nargs="+", help="User ids or emails")
