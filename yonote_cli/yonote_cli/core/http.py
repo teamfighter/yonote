@@ -42,9 +42,7 @@ def http_json(
                     return raw
             return raw
     except HTTPError as e:
-        body = e.read().decode("utf-8", errors="ignore")
-        print(f"[HTTP {e.code}] {body}", file=sys.stderr)
-        sys.exit(2)
+        _handle_http_error(e)
     except URLError as e:
         print(f"Network error: {e.reason}", file=sys.stderr)
         sys.exit(2)
@@ -100,10 +98,27 @@ def http_multipart_post(url: str, token: str, fields: Dict[str, object]) -> Dict
                     return raw
             return raw
     except HTTPError as e:
-        body = e.read().decode("utf-8", errors="ignore")
-        print(f"[HTTP {e.code}] {body}", file=sys.stderr)
-        sys.exit(2)
+        _handle_http_error(e)
     except URLError as e:
         print(f"Network error: {e.reason}", file=sys.stderr)
         sys.exit(2)
+
+
+def _handle_http_error(e: HTTPError) -> None:
+    body = e.read().decode("utf-8", errors="ignore")
+    message = body
+    try:
+        data = json.loads(body)
+        if isinstance(data, dict) and data.get("error"):
+            message = data["error"]
+    except Exception:
+        pass
+
+    if e.code == 401:
+        print(f"Authentication failed: {message}", file=sys.stderr)
+    elif e.code == 403:
+        print(f"Forbidden: {message} (are you an administrator?)", file=sys.stderr)
+    else:
+        print(f"[HTTP {e.code}] {message}", file=sys.stderr)
+    sys.exit(2)
 
