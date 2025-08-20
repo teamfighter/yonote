@@ -13,6 +13,7 @@ from ..core import (
     get_base_and_token,
     http_json,
 )
+from ..core.config import API_MAX_LIMIT
 
 
 # --- helpers ---------------------------------------------------------------
@@ -45,7 +46,13 @@ def _resolve_user_id(base: str, token: str, ident: str) -> str:
 def _resolve_group_id(base: str, token: str, ident: str) -> str:
     if _is_uuid(ident):
         return ident
-    groups = fetch_all_concurrent(base, token, "/groups.list", {}, desc=None)
+    groups = fetch_all_concurrent(
+        base,
+        token,
+        "/groups.list",
+        params={},
+        desc=None,
+    )
     for group in groups:
         if group.get("name") == ident:
             return group["id"]
@@ -66,12 +73,18 @@ def _apply_user_action(path: str, idents: Iterable[str]) -> None:
 
 def cmd_admin_users_list(args) -> None:
     base, token = get_base_and_token()
-    params = {}
+    params: dict = {}
     if args.filter:
         params["filter"] = args.filter
     if args.query:
         params["query"] = args.query
-    users = fetch_all_concurrent(base, token, "/users.list", params, desc=None)
+    users = fetch_all_concurrent(
+        base,
+        token,
+        "/users.list",
+        params=params,
+        desc=None,
+    )
     format_rows(users, ["id", "email", "name", "isAdmin", "isSuspended"])
 
 
@@ -121,7 +134,13 @@ def cmd_admin_users_delete(args) -> None:
 
 def cmd_admin_groups_list(_args) -> None:
     base, token = get_base_and_token()
-    groups = fetch_all_concurrent(base, token, "/groups.list", {}, desc=None)
+    groups = fetch_all_concurrent(
+        base,
+        token,
+        "/groups.list",
+        params={},
+        desc=None,
+    )
     format_rows(groups, ["id", "name", "memberCount"])
 
 
@@ -150,14 +169,29 @@ def cmd_admin_groups_delete(args) -> None:
     print(f"delete {args.group}")
 
 
+def _fetch_memberships(base: str, token: str, path: str, params: dict, key: str):
+    """Fetch all paginated membership results for ``key``."""
+    results: list = []
+    offset = 0
+    while True:
+        payload = dict(params)
+        payload.update({"limit": API_MAX_LIMIT, "offset": offset})
+        data = http_json("POST", f"{base}{path}", token, payload)
+        items = (data.get("data") or {}).get(key, [])
+        results.extend(items)
+        if len(items) < API_MAX_LIMIT:
+            break
+        offset += API_MAX_LIMIT
+    return results
+
+
 def cmd_admin_groups_memberships(args) -> None:
     base, token = get_base_and_token()
     gid = _resolve_group_id(base, token, args.group)
-    payload = {"id": gid, "limit": 1000}
+    params = {"id": gid}
     if args.query:
-        payload["query"] = args.query
-    data = http_json("POST", f"{base}/groups.memberships", token, payload)
-    users = data.get("data", {}).get("users", [])
+        params["query"] = args.query
+    users = _fetch_memberships(base, token, "/groups.memberships", params, "users")
     format_rows(users, ["id", "email", "name"])
 
 
@@ -206,18 +240,18 @@ def cmd_admin_collections_remove_user(args) -> None:
 
 def cmd_admin_collections_memberships(args) -> None:
     base, token = get_base_and_token()
-    payload = {"id": args.collection, "limit": 1000}
+    params = {"id": args.collection}
     if args.query:
-        payload["query"] = args.query
+        params["query"] = args.query
     if args.permission:
-        payload["permission"] = args.permission
-    data = http_json(
-        "POST",
-        f"{base}/collections.memberships",
+        params["permission"] = args.permission
+    users = _fetch_memberships(
+        base,
         token,
-        payload,
+        "/collections.memberships",
+        params,
+        "users",
     )
-    users = data.get("data", {}).get("users", [])
     format_rows(users, ["id", "email", "name"])
 
 
@@ -247,16 +281,16 @@ def cmd_admin_collections_remove_group(args) -> None:
 
 def cmd_admin_collections_group_memberships(args) -> None:
     base, token = get_base_and_token()
-    payload = {"id": args.collection, "limit": 1000}
+    params = {"id": args.collection}
     if args.query:
-        payload["query"] = args.query
+        params["query"] = args.query
     if args.permission:
-        payload["permission"] = args.permission
-    data = http_json(
-        "POST",
-        f"{base}/collections.group_memberships",
+        params["permission"] = args.permission
+    groups = _fetch_memberships(
+        base,
         token,
-        payload,
+        "/collections.group_memberships",
+        params,
+        "groups",
     )
-    groups = data.get("data", {}).get("groups", [])
     format_rows(groups, ["id", "name", "memberCount"])
