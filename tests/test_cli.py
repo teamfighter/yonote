@@ -7,6 +7,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "yonote_cli"))
 import yonote_cli.commands.admin as admin
+import yonote_cli.commands.users as users
 
 def test_cli_help():
     result = subprocess.run([
@@ -21,7 +22,13 @@ def test_admin_users_help():
         "python", "-m", "yonote_cli.yonote_cli", "admin", "users", "--help"
     ], capture_output=True, text=True)
     assert result.returncode == 0
-    assert "promote" in result.stdout
+    assert "update" in result.stdout
+    assert "promote" not in result.stdout
+
+    upd_help = subprocess.run([
+        "python", "-m", "yonote_cli.yonote_cli", "admin", "users", "update", "--help"
+    ], capture_output=True, text=True)
+    assert "--promote" in upd_help.stdout
 
 
 def test_auth_help():
@@ -42,6 +49,14 @@ def test_auth_set(tmp_path):
     cfg = json.loads((tmp_path / ".yonote.json").read_text())
     assert cfg["base_url"] == "https://example.com/api"
     assert cfg["token"] == "secret"
+
+
+def test_users_help():
+    result = subprocess.run([
+        "python", "-m", "yonote_cli.yonote_cli", "users", "--help"
+    ], capture_output=True, text=True)
+    assert result.returncode == 0
+    assert "list" in result.stdout
 
 
 def test_admin_users_list_pagination(monkeypatch, capsys):
@@ -76,6 +91,60 @@ def test_admin_users_list_query(monkeypatch):
     args = SimpleNamespace(query="smith")
     admin.cmd_admin_users_list(args)
     assert captured["params"] == {"query": "smith"}
+
+
+def test_users_list_query(monkeypatch):
+    captured = {}
+
+    def fake_fetch_all(base, token, path, *, params=None, **_):
+        captured["params"] = params
+        return []
+
+    monkeypatch.setattr(admin, "fetch_all_concurrent", fake_fetch_all)
+    monkeypatch.setattr(admin, "get_base_and_token", lambda: ("base", "token"))
+
+    args = SimpleNamespace(query="smith")
+    users.cmd_users_list(args)
+    assert captured["params"] == {"query": "smith"}
+
+
+def test_admin_users_update_promote(monkeypatch):
+    calls = []
+
+    def fake_http_json(method, url, token, payload):
+        calls.append((url, payload))
+        return {"data": {}}
+
+    monkeypatch.setattr(admin, "http_json", fake_http_json)
+    monkeypatch.setattr(admin, "get_base_and_token", lambda: ("base", "token"))
+    monkeypatch.setattr(admin, "_resolve_user_id", lambda base, token, ident: ident + "_id")
+
+    args = SimpleNamespace(users=["u1", "u2"], name=None, avatar_url=None,
+                           promote=True, demote=False, suspend=False, activate=False)
+    admin.cmd_admin_users_update(args)
+    assert calls == [
+        ("base/users.promote", {"id": "u1_id"}),
+        ("base/users.promote", {"id": "u2_id"}),
+    ]
+
+
+def test_admin_users_update_name(monkeypatch):
+    captured = {}
+
+    def fake_http_json(method, url, token, payload):
+        captured["url"] = url
+        captured["payload"] = payload
+        return {"data": {}}
+
+    monkeypatch.setattr(admin, "http_json", fake_http_json)
+    monkeypatch.setattr(admin, "get_base_and_token", lambda: ("base", "token"))
+    monkeypatch.setattr(admin, "_resolve_user_id", lambda base, token, ident: "uid")
+
+    args = SimpleNamespace(users=["u"], name="New", avatar_url=None,
+                           promote=False, demote=False, suspend=False, activate=False)
+    admin.cmd_admin_users_update(args)
+    assert captured["url"] == "base/users.update"
+    assert captured["payload"] == {"id": "uid", "name": "New"}
 
 
 def test_admin_groups_memberships_paginates(monkeypatch, capsys):

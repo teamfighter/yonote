@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import re
 import sys
-from typing import Iterable
+from typing import Iterable, List, Tuple
 
 from ..core import (
     fetch_all_concurrent,
@@ -95,32 +95,44 @@ def cmd_admin_users_info(args) -> None:
 
 def cmd_admin_users_update(args) -> None:
     base, token = get_base_and_token()
-    uid = _resolve_user_id(base, token, args.user)
-    payload = {"id": uid}
+    updates = {}
     if args.name:
-        payload["name"] = args.name
-    if args.email:
-        payload["email"] = args.email
+        updates["name"] = args.name
     if args.avatar_url:
-        payload["avatarUrl"] = args.avatar_url
-    data = http_json("POST", f"{base}/users.update", token, payload)
-    print(json.dumps(data.get("data"), ensure_ascii=False, indent=2))
+        updates["avatarUrl"] = args.avatar_url
 
+    actions: List[Tuple[str, str]] = []
+    if args.promote:
+        actions.append(("users.promote", "promote"))
+    if args.demote:
+        actions.append(("users.demote", "demote"))
+    if args.suspend:
+        actions.append(("users.suspend", "suspend"))
+    if args.activate:
+        actions.append(("users.activate", "activate"))
 
-def cmd_admin_users_promote(args) -> None:
-    _apply_user_action("users.promote", args.users)
+    if not updates and not actions:
+        print("No update parameters provided", file=sys.stderr)
+        sys.exit(1)
 
+    if updates and len(args.users) > 1:
+        print("Profile fields can only be updated for a single user", file=sys.stderr)
+        sys.exit(1)
 
-def cmd_admin_users_demote(args) -> None:
-    _apply_user_action("users.demote", args.users)
+    resolved = [
+        (ident, _resolve_user_id(base, token, ident)) for ident in args.users
+    ]
 
+    if updates:
+        ident, uid = resolved[0]
+        payload = {"id": uid, **updates}
+        data = http_json("POST", f"{base}/users.update", token, payload)
+        print(json.dumps(data.get("data"), ensure_ascii=False, indent=2))
 
-def cmd_admin_users_suspend(args) -> None:
-    _apply_user_action("users.suspend", args.users)
-
-
-def cmd_admin_users_activate(args) -> None:
-    _apply_user_action("users.activate", args.users)
+    for path, verb in actions:
+        for ident, uid in resolved:
+            http_json("POST", f"{base}/{path}", token, {"id": uid})
+            print(f"{verb} {ident}")
 
 
 def cmd_admin_users_delete(args) -> None:

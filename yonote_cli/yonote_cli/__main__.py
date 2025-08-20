@@ -22,10 +22,6 @@ try:  # pragma: no cover - exercised indirectly in tests
         cmd_admin_users_list,
         cmd_admin_users_info,
         cmd_admin_users_update,
-        cmd_admin_users_promote,
-        cmd_admin_users_demote,
-        cmd_admin_users_suspend,
-        cmd_admin_users_activate,
         cmd_admin_users_delete,
         cmd_admin_groups_list,
         cmd_admin_groups_create,
@@ -40,6 +36,23 @@ try:  # pragma: no cover - exercised indirectly in tests
         cmd_admin_collections_add_group,
         cmd_admin_collections_remove_group,
         cmd_admin_collections_group_memberships,
+        cmd_users_list,
+        cmd_users_info,
+        cmd_users_update,
+        cmd_users_delete,
+        cmd_groups_list,
+        cmd_groups_create,
+        cmd_groups_update,
+        cmd_groups_delete,
+        cmd_groups_memberships,
+        cmd_groups_add_user,
+        cmd_groups_remove_user,
+        cmd_collections_add_user,
+        cmd_collections_remove_user,
+        cmd_collections_memberships,
+        cmd_collections_add_group,
+        cmd_collections_remove_group,
+        cmd_collections_group_memberships,
     )
 except ModuleNotFoundError:  # pragma: no cover
     if __package__ in (None, ""):
@@ -56,10 +69,6 @@ except ModuleNotFoundError:  # pragma: no cover
         cmd_admin_users_list,
         cmd_admin_users_info,
         cmd_admin_users_update,
-        cmd_admin_users_promote,
-        cmd_admin_users_demote,
-        cmd_admin_users_suspend,
-        cmd_admin_users_activate,
         cmd_admin_users_delete,
         cmd_admin_groups_list,
         cmd_admin_groups_create,
@@ -74,6 +83,23 @@ except ModuleNotFoundError:  # pragma: no cover
         cmd_admin_collections_add_group,
         cmd_admin_collections_remove_group,
         cmd_admin_collections_group_memberships,
+        cmd_users_list,
+        cmd_users_info,
+        cmd_users_update,
+        cmd_users_delete,
+        cmd_groups_list,
+        cmd_groups_create,
+        cmd_groups_update,
+        cmd_groups_delete,
+        cmd_groups_memberships,
+        cmd_groups_add_user,
+        cmd_groups_remove_user,
+        cmd_collections_add_user,
+        cmd_collections_remove_user,
+        cmd_collections_memberships,
+        cmd_collections_add_group,
+        cmd_collections_remove_group,
+        cmd_collections_group_memberships,
     )
 
 
@@ -116,6 +142,105 @@ def main(argv=None):
     p_imp.add_argument("--refresh-cache", action="store_true", help="Ignore cache and refetch collections/documents")
     p_imp.set_defaults(func=cmd_import)
 
+    # users
+    p_users = sub.add_parser("users", help="User operations")
+    sub_users = p_users.add_subparsers(dest="users_cmd")
+
+    p_users_list = sub_users.add_parser("list", help="List users")
+    p_users_list.add_argument("--query")
+    p_users_list.set_defaults(func=cmd_users_list)
+
+    p_users_info = sub_users.add_parser("info", help="Show user info")
+    p_users_info.add_argument("user", help="User id or email")
+    p_users_info.set_defaults(func=cmd_users_info)
+
+    p_users_update = sub_users.add_parser("update", help="Update users")
+    p_users_update.add_argument("users", nargs="+", help="User ids or emails")
+    p_users_update.add_argument("--name")
+    p_users_update.add_argument("--avatar-url")
+    g_u_admin = p_users_update.add_mutually_exclusive_group()
+    g_u_admin.add_argument("--promote", action="store_true", help="Promote to admin")
+    g_u_admin.add_argument("--demote", action="store_true", help="Demote from admin")
+    g_u_status = p_users_update.add_mutually_exclusive_group()
+    g_u_status.add_argument("--suspend", action="store_true", help="Suspend user")
+    g_u_status.add_argument("--activate", action="store_true", help="Activate user")
+    p_users_update.set_defaults(func=cmd_users_update)
+
+    p_users_delete = sub_users.add_parser("delete", help="Delete user(s)")
+    p_users_delete.add_argument("users", nargs="+", help="User ids or emails")
+    p_users_delete.set_defaults(func=cmd_users_delete)
+
+    # groups
+    p_groups = sub.add_parser("groups", help="Manage groups")
+    sub_groups = p_groups.add_subparsers(dest="groups_cmd")
+
+    p_g_list = sub_groups.add_parser("list", help="List groups")
+    p_g_list.set_defaults(func=cmd_groups_list)
+
+    p_g_create = sub_groups.add_parser("create", help="Create group")
+    p_g_create.add_argument("name")
+    p_g_create.set_defaults(func=cmd_groups_create)
+
+    p_g_update = sub_groups.add_parser("update", help="Update group")
+    p_g_update.add_argument("group", help="Group id or name")
+    p_g_update.add_argument("name")
+    p_g_update.set_defaults(func=cmd_groups_update)
+
+    p_g_delete = sub_groups.add_parser("delete", help="Delete group")
+    p_g_delete.add_argument("group")
+    p_g_delete.set_defaults(func=cmd_groups_delete)
+
+    p_g_memberships = sub_groups.add_parser("memberships", help="List group members")
+    p_g_memberships.add_argument("group")
+    p_g_memberships.add_argument("--query")
+    p_g_memberships.set_defaults(func=cmd_groups_memberships)
+
+    p_g_add_user = sub_groups.add_parser("add_user", help="Add user to group")
+    p_g_add_user.add_argument("group")
+    p_g_add_user.add_argument("user")
+    p_g_add_user.set_defaults(func=cmd_groups_add_user)
+
+    p_g_remove_user = sub_groups.add_parser("remove_user", help="Remove user from group")
+    p_g_remove_user.add_argument("group")
+    p_g_remove_user.add_argument("user")
+    p_g_remove_user.set_defaults(func=cmd_groups_remove_user)
+
+    # collections
+    p_cols = sub.add_parser("collections", help="Manage collection access")
+    sub_cols = p_cols.add_subparsers(dest="collections_cmd")
+
+    p_c_add_user = sub_cols.add_parser("add_user", help="Add user to collection")
+    p_c_add_user.add_argument("collection")
+    p_c_add_user.add_argument("user")
+    p_c_add_user.set_defaults(func=cmd_collections_add_user)
+
+    p_c_remove_user = sub_cols.add_parser("remove_user", help="Remove user from collection")
+    p_c_remove_user.add_argument("collection")
+    p_c_remove_user.add_argument("user")
+    p_c_remove_user.set_defaults(func=cmd_collections_remove_user)
+
+    p_c_memberships = sub_cols.add_parser("memberships", help="List collection user memberships")
+    p_c_memberships.add_argument("collection")
+    p_c_memberships.add_argument("--query")
+    p_c_memberships.add_argument("--permission", choices=["read", "read_write", "maintainer"])
+    p_c_memberships.set_defaults(func=cmd_collections_memberships)
+
+    p_c_add_group = sub_cols.add_parser("add_group", help="Add group to collection")
+    p_c_add_group.add_argument("collection")
+    p_c_add_group.add_argument("group")
+    p_c_add_group.set_defaults(func=cmd_collections_add_group)
+
+    p_c_remove_group = sub_cols.add_parser("remove_group", help="Remove group from collection")
+    p_c_remove_group.add_argument("collection")
+    p_c_remove_group.add_argument("group")
+    p_c_remove_group.set_defaults(func=cmd_collections_remove_group)
+
+    p_c_group_memberships = sub_cols.add_parser("group_memberships", help="List collection group memberships")
+    p_c_group_memberships.add_argument("collection")
+    p_c_group_memberships.add_argument("--query")
+    p_c_group_memberships.add_argument("--permission", choices=["read", "read_write", "maintainer"])
+    p_c_group_memberships.set_defaults(func=cmd_collections_group_memberships)
+
     # admin
     p_admin = sub.add_parser("admin", help="Administrative operations")
     sub_admin = p_admin.add_subparsers(dest="admin_cmd")
@@ -132,23 +257,21 @@ def main(argv=None):
     p_admin_users_info.add_argument("user", help="User id or email")
     p_admin_users_info.set_defaults(func=cmd_admin_users_info)
 
-    p_admin_users_update = sub_admin_users.add_parser("update", help="Update a user")
-    p_admin_users_update.add_argument("user", help="User id or email")
+    p_admin_users_update = sub_admin_users.add_parser("update", help="Update users")
+    p_admin_users_update.add_argument("users", nargs="+", help="User ids or emails")
     p_admin_users_update.add_argument("--name")
-    p_admin_users_update.add_argument("--email")
     p_admin_users_update.add_argument("--avatar-url")
+    g_admin = p_admin_users_update.add_mutually_exclusive_group()
+    g_admin.add_argument("--promote", action="store_true", help="Promote to admin")
+    g_admin.add_argument("--demote", action="store_true", help="Demote from admin")
+    g_status = p_admin_users_update.add_mutually_exclusive_group()
+    g_status.add_argument("--suspend", action="store_true", help="Suspend user")
+    g_status.add_argument("--activate", action="store_true", help="Activate user")
     p_admin_users_update.set_defaults(func=cmd_admin_users_update)
 
-    for name, func in [
-        ("promote", cmd_admin_users_promote),
-        ("demote", cmd_admin_users_demote),
-        ("suspend", cmd_admin_users_suspend),
-        ("activate", cmd_admin_users_activate),
-        ("delete", cmd_admin_users_delete),
-    ]:
-        p = sub_admin_users.add_parser(name, help=f"{name.capitalize()} user(s)")
-        p.add_argument("users", nargs="+", help="User ids or emails")
-        p.set_defaults(func=func)
+    p_admin_users_delete = sub_admin_users.add_parser("delete", help="Delete user(s)")
+    p_admin_users_delete.add_argument("users", nargs="+", help="User ids or emails")
+    p_admin_users_delete.set_defaults(func=cmd_admin_users_delete)
 
     # admin groups
     p_admin_groups = sub_admin.add_parser("groups", help="Manage groups")
@@ -233,6 +356,15 @@ def main(argv=None):
         return 0
     if args.cmd == "cache" and not getattr(args, "cache_cmd", None):
         p_cache.print_help()
+        return 0
+    if args.cmd == "users" and not getattr(args, "users_cmd", None):
+        p_users.print_help()
+        return 0
+    if args.cmd == "groups" and not getattr(args, "groups_cmd", None):
+        p_groups.print_help()
+        return 0
+    if args.cmd == "collections" and not getattr(args, "collections_cmd", None):
+        p_cols.print_help()
         return 0
     if args.cmd == "admin" and not getattr(args, "admin_cmd", None):
         p_admin.print_help()

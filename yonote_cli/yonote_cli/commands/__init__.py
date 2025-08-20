@@ -8,10 +8,6 @@ from .admin import (
     cmd_admin_users_list,
     cmd_admin_users_info,
     cmd_admin_users_update,
-    cmd_admin_users_promote,
-    cmd_admin_users_demote,
-    cmd_admin_users_suspend,
-    cmd_admin_users_activate,
     cmd_admin_users_delete,
     cmd_admin_groups_list,
     cmd_admin_groups_create,
@@ -27,6 +23,29 @@ from .admin import (
     cmd_admin_collections_remove_group,
     cmd_admin_collections_group_memberships,
 )
+from .users import (
+    cmd_users_list,
+    cmd_users_info,
+    cmd_users_update,
+    cmd_users_delete,
+)
+from .groups import (
+    cmd_groups_list,
+    cmd_groups_create,
+    cmd_groups_update,
+    cmd_groups_delete,
+    cmd_groups_memberships,
+    cmd_groups_add_user,
+    cmd_groups_remove_user,
+)
+from .collections import (
+    cmd_collections_add_user,
+    cmd_collections_remove_user,
+    cmd_collections_memberships,
+    cmd_collections_add_group,
+    cmd_collections_remove_group,
+    cmd_collections_group_memberships,
+)
 
 __all__ = [
     "cmd_auth_set",
@@ -38,10 +57,6 @@ __all__ = [
     "cmd_admin_users_list",
     "cmd_admin_users_info",
     "cmd_admin_users_update",
-    "cmd_admin_users_promote",
-    "cmd_admin_users_demote",
-    "cmd_admin_users_suspend",
-    "cmd_admin_users_activate",
     "cmd_admin_users_delete",
     "cmd_admin_groups_list",
     "cmd_admin_groups_create",
@@ -56,4 +71,21 @@ __all__ = [
     "cmd_admin_collections_add_group",
     "cmd_admin_collections_remove_group",
     "cmd_admin_collections_group_memberships",
+    "cmd_users_list",
+    "cmd_users_info",
+    "cmd_users_update",
+    "cmd_users_delete",
+    "cmd_groups_list",
+    "cmd_groups_create",
+    "cmd_groups_update",
+    "cmd_groups_delete",
+    "cmd_groups_memberships",
+    "cmd_groups_add_user",
+    "cmd_groups_remove_user",
+    "cmd_collections_add_user",
+    "cmd_collections_remove_user",
+    "cmd_collections_memberships",
+    "cmd_collections_add_group",
+    "cmd_collections_remove_group",
+    "cmd_collections_group_memberships",
 ]
