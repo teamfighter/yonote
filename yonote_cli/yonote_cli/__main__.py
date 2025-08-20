@@ -35,6 +35,7 @@ try:  # pragma: no cover - exercised indirectly in tests
         cmd_groups_memberships,
         cmd_groups_add_user,
         cmd_groups_remove_user,
+        cmd_collections_list,
         cmd_collections_add_user,
         cmd_collections_remove_user,
         cmd_collections_memberships,
@@ -53,6 +54,7 @@ try:  # pragma: no cover - exercised indirectly in tests
         cmd_admin_groups_memberships,
         cmd_admin_groups_add_user,
         cmd_admin_groups_remove_user,
+        cmd_admin_collections_list,
         cmd_admin_collections_add_user,
         cmd_admin_collections_remove_user,
         cmd_admin_collections_memberships,
@@ -88,6 +90,7 @@ except ModuleNotFoundError:  # pragma: no cover
         cmd_groups_memberships,
         cmd_groups_add_user,
         cmd_groups_remove_user,
+        cmd_collections_list,
         cmd_collections_add_user,
         cmd_collections_remove_user,
         cmd_collections_memberships,
@@ -106,6 +109,7 @@ except ModuleNotFoundError:  # pragma: no cover
         cmd_admin_groups_memberships,
         cmd_admin_groups_add_user,
         cmd_admin_groups_remove_user,
+        cmd_admin_collections_list,
         cmd_admin_collections_add_user,
         cmd_admin_collections_remove_user,
         cmd_admin_collections_memberships,
@@ -168,6 +172,7 @@ def main(argv=None):
 
     p_u_add = sub_users.add_parser("add", help="Invite users")
     p_u_add.add_argument("emails", nargs="+", help="Email addresses")
+    p_u_add.add_argument("--role", choices=["admin", "member", "viewer"], default="member")
     p_u_add.set_defaults(func=cmd_users_add)
 
     p_u_update = sub_users.add_parser("update", help="Update user")
@@ -201,6 +206,7 @@ def main(argv=None):
     sub_groups = p_groups.add_subparsers(dest="groups_cmd")
 
     p_g_list = sub_groups.add_parser("list", help="List groups")
+    p_g_list.add_argument("--query")
     p_g_list.set_defaults(func=cmd_groups_list)
 
     p_g_create = sub_groups.add_parser("create", help="Create group")
@@ -234,6 +240,10 @@ def main(argv=None):
     # collections
     p_cols = sub.add_parser("collections", help="Manage collection access")
     sub_cols = p_cols.add_subparsers(dest="collections_cmd")
+
+    p_c_list = sub_cols.add_parser("list", help="List collections")
+    p_c_list.add_argument("--query")
+    p_c_list.set_defaults(func=cmd_collections_list)
 
     p_c_add_user = sub_cols.add_parser("add_user", help="Add user to collection")
     p_c_add_user.add_argument("collection")
@@ -287,6 +297,7 @@ def main(argv=None):
 
     p_admin_users_add = sub_admin_users.add_parser("add", help="Invite users")
     p_admin_users_add.add_argument("emails", nargs="+", help="Email addresses")
+    p_admin_users_add.add_argument("--role", choices=["admin", "member", "viewer"], default="member")
     p_admin_users_add.set_defaults(func=cmd_admin_users_add)
 
     p_admin_users_update = sub_admin_users.add_parser("update", help="Update users")
@@ -310,6 +321,7 @@ def main(argv=None):
     sub_admin_groups = p_admin_groups.add_subparsers(dest="admin_groups_cmd")
 
     p_ag_list = sub_admin_groups.add_parser("list", help="List groups")
+    p_ag_list.add_argument("--query")
     p_ag_list.set_defaults(func=cmd_admin_groups_list)
 
     p_ag_create = sub_admin_groups.add_parser("create", help="Create group")
@@ -343,6 +355,10 @@ def main(argv=None):
     # admin collections
     p_admin_collections = sub_admin.add_parser("collections", help="Manage collection access")
     sub_admin_collections = p_admin_collections.add_subparsers(dest="admin_collections_cmd")
+
+    p_ac_list = sub_admin_collections.add_parser("list", help="List collections")
+    p_ac_list.add_argument("--query")
+    p_ac_list.set_defaults(func=cmd_admin_collections_list)
 
     p_ac_add_user = sub_admin_collections.add_parser("add_user", help="Add user to collection")
     p_ac_add_user.add_argument("collection")

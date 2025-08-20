@@ -1,6 +1,7 @@
 """Collection command wrappers for Yonote CLI."""
 
 from .admin import (
+    cmd_admin_collections_list as cmd_collections_list,
     cmd_admin_collections_add_user as cmd_collections_add_user,
     cmd_admin_collections_remove_user as cmd_collections_remove_user,
     cmd_admin_collections_memberships as cmd_collections_memberships,
@@ -10,6 +11,7 @@ from .admin import (
 )
 
 __all__ = [
+    "cmd_collections_list",
     "cmd_collections_add_user",
     "cmd_collections_remove_user",
     "cmd_collections_memberships",

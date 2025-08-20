@@ -17,6 +17,7 @@ from .admin import (
     cmd_admin_groups_memberships,
     cmd_admin_groups_add_user,
     cmd_admin_groups_remove_user,
+    cmd_admin_collections_list,
     cmd_admin_collections_add_user,
     cmd_admin_collections_remove_user,
     cmd_admin_collections_memberships,
@@ -45,6 +46,7 @@ from .groups import (
     cmd_groups_remove_user,
 )
 from .collections import (
+    cmd_collections_list,
     cmd_collections_add_user,
     cmd_collections_remove_user,
     cmd_collections_memberships,
@@ -72,6 +74,7 @@ __all__ = [
     "cmd_admin_groups_memberships",
     "cmd_admin_groups_add_user",
     "cmd_admin_groups_remove_user",
+    "cmd_admin_collections_list",
     "cmd_admin_collections_add_user",
     "cmd_admin_collections_remove_user",
     "cmd_admin_collections_memberships",
@@ -94,6 +97,7 @@ __all__ = [
     "cmd_groups_memberships",
     "cmd_groups_add_user",
     "cmd_groups_remove_user",
+    "cmd_collections_list",
     "cmd_collections_add_user",
     "cmd_collections_remove_user",
     "cmd_collections_memberships",

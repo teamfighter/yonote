@@ -99,14 +99,18 @@ def test_admin_users_add(monkeypatch, capsys):
 
     monkeypatch.setattr(admin, "http_json", fake_http_json)
     monkeypatch.setattr(admin, "get_base_and_token", lambda: ("base", "token"))
-    monkeypatch.setattr(admin, "_resolve_user_id", lambda base, token, ident: ident)
 
-    args = SimpleNamespace(emails=["a@example.com", "b@example.com"])
+    args = SimpleNamespace(emails=["a@example.com", "b@example.com"], role="member")
     admin.cmd_admin_users_add(args)
     out, _ = capsys.readouterr()
     assert "invited a@example.com" in out
     assert captured["url"] == "base/users.invite"
-    assert captured["payload"] == {"emails": ["a@example.com", "b@example.com"]}
+    assert captured["payload"] == {
+        "invites": [
+            {"email": "a@example.com", "name": "a", "role": "member"},
+            {"email": "b@example.com", "name": "b", "role": "member"},
+        ]
+    }
 
 
 def test_admin_users_update_promote(monkeypatch):
@@ -170,6 +174,23 @@ def test_admin_groups_memberships_paginates(monkeypatch, capsys):
     out, _ = capsys.readouterr()
     assert "u2@example.com" in out
     assert offsets[:2] == [0, 1]
+
+
+def test_admin_groups_list(monkeypatch, capsys):
+    captured = {}
+
+    def fake_fetch(base, token, path, params, key):
+        captured["params"] = params
+        return [{"id": "g1", "name": "G1", "memberCount": 1}]
+
+    monkeypatch.setattr(admin, "_fetch_memberships", fake_fetch)
+    monkeypatch.setattr(admin, "get_base_and_token", lambda: ("base", "token"))
+
+    args = SimpleNamespace(query="qq")
+    admin.cmd_admin_groups_list(args)
+    out, _ = capsys.readouterr()
+    assert "G1" in out
+    assert captured["params"] == {"query": "qq"}
 
 
 def test_users_help():
@@ -290,3 +311,20 @@ def test_collections_group_memberships_params(monkeypatch):
     collections_cmd.cmd_collections_group_memberships(args)
     assert captured["permission"] == "maintainer"
     assert captured["query"] == "gq"
+
+
+def test_admin_collections_list(monkeypatch, capsys):
+    captured = {}
+
+    def fake_fetch_all(base, token, path, *, params=None, **_):
+        captured["params"] = params
+        return [{"id": "c1", "name": "C1"}]
+
+    monkeypatch.setattr(admin, "fetch_all_concurrent", fake_fetch_all)
+    monkeypatch.setattr(admin, "get_base_and_token", lambda: ("base", "token"))
+
+    args = SimpleNamespace(query="q")
+    admin.cmd_admin_collections_list(args)
+    out, _ = capsys.readouterr()
+    assert "C1" in out
+    assert captured["params"] == {"query": "q"}

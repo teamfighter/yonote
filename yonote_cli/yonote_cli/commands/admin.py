@@ -96,8 +96,11 @@ def cmd_admin_users_info(args) -> None:
 def cmd_admin_users_add(args) -> None:
     """Invite one or more users by email."""
     base, token = get_base_and_token()
-    payload = {"emails": args.emails}
-    http_json("POST", f"{base}/users.invite", token, payload)
+    invites = [
+        {"email": email, "name": email.split("@")[0], "role": args.role}
+        for email in args.emails
+    ]
+    http_json("POST", f"{base}/users.invite", token, {"invites": invites})
     for email in args.emails:
         print(f"invited {email}")
 
@@ -151,15 +154,12 @@ def cmd_admin_users_delete(args) -> None:
 # --- group commands -------------------------------------------------------
 
 
-def cmd_admin_groups_list(_args) -> None:
+def cmd_admin_groups_list(args) -> None:
     base, token = get_base_and_token()
-    groups = fetch_all_concurrent(
-        base,
-        token,
-        "/groups.list",
-        params={},
-        desc=None,
-    )
+    params = {}
+    if getattr(args, "query", None):
+        params["query"] = args.query
+    groups = _fetch_memberships(base, token, "/groups.list", params, "groups")
     format_rows(groups, ["id", "name", "memberCount"])
 
 
@@ -231,6 +231,21 @@ def cmd_admin_groups_remove_user(args) -> None:
 
 
 # --- collection commands --------------------------------------------------
+
+
+def cmd_admin_collections_list(args) -> None:
+    base, token = get_base_and_token()
+    params = {}
+    if getattr(args, "query", None):
+        params["query"] = args.query
+    cols = fetch_all_concurrent(
+        base,
+        token,
+        "/collections.list",
+        params=params,
+        desc=None,
+    )
+    format_rows(cols, ["id", "name"])
 
 
 def cmd_admin_collections_add_user(args) -> None:
