@@ -10,7 +10,7 @@ Command line tool for exporting and importing documents from [Yonote](https://yo
 Images are published to the [GitHub Container Registry](https://github.com/teamfighter/yonote/pkgs/container/yonote). To use the CLI pull the image and source the helper script:
 
 ```bash
-export YONOTE_VERSION=<latest tag>
+export YONOTE_VERSION=v0.3.2
 docker pull ghcr.io/teamfighter/yonote:$YONOTE_VERSION
 curl -O https://raw.githubusercontent.com/teamfighter/yonote/main/yonote.sh
 chmod +x yonote.sh
