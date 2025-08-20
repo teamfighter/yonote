@@ -74,8 +74,6 @@ def _apply_user_action(path: str, idents: Iterable[str]) -> None:
 def cmd_admin_users_list(args) -> None:
     base, token = get_base_and_token()
     params: dict = {}
-    if args.filter:
-        params["filter"] = args.filter
     if args.query:
         params["query"] = args.query
     users = fetch_all_concurrent(

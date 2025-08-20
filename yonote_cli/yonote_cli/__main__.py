@@ -125,7 +125,6 @@ def main(argv=None):
     sub_admin_users = p_admin_users.add_subparsers(dest="admin_users_cmd")
 
     p_admin_users_list = sub_admin_users.add_parser("list", help="List users")
-    p_admin_users_list.add_argument("--filter")
     p_admin_users_list.add_argument("--query")
     p_admin_users_list.set_defaults(func=cmd_admin_users_list)
 

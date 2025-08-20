@@ -56,11 +56,26 @@ def test_admin_users_list_pagination(monkeypatch, capsys):
     monkeypatch.setattr(admin, "fetch_all_concurrent", fake_fetch_all)
     monkeypatch.setattr(admin, "get_base_and_token", lambda: ("base", "token"))
 
-    args = SimpleNamespace(filter=None, query=None)
+    args = SimpleNamespace(query=None)
     admin.cmd_admin_users_list(args)
     out, _ = capsys.readouterr()
     assert "a@example.com" in out
     assert captured["params"] == {}
+
+
+def test_admin_users_list_query(monkeypatch):
+    captured = {}
+
+    def fake_fetch_all(base, token, path, *, params=None, **_):
+        captured["params"] = params
+        return []
+
+    monkeypatch.setattr(admin, "fetch_all_concurrent", fake_fetch_all)
+    monkeypatch.setattr(admin, "get_base_and_token", lambda: ("base", "token"))
+
+    args = SimpleNamespace(query="smith")
+    admin.cmd_admin_users_list(args)
+    assert captured["params"] == {"query": "smith"}
 
 
 def test_admin_groups_memberships_paginates(monkeypatch, capsys):
