@@ -498,3 +498,153 @@ def test_admin_collections_list(monkeypatch, capsys):
     out, _ = capsys.readouterr()
     assert "C1" in out
     assert captured["params"] == {"query": "q"}
+
+
+def test_admin_users_delete(monkeypatch):
+    calls = []
+
+    def fake_http_json(method, url, token, payload, *, handle_error=True):
+        calls.append((url, payload, handle_error))
+        return {}
+
+    monkeypatch.setattr(admin, "http_json", fake_http_json)
+    monkeypatch.setattr(admin, "_resolve_user_id", lambda base, token, ident, **_: ident)
+    monkeypatch.setattr(admin, "get_base_and_token", lambda: ("base", "token"))
+
+    args = SimpleNamespace(users=["u1", "u2"])
+    admin.cmd_admin_users_delete(args)
+
+    assert calls == [
+        ("base/users.delete", {"id": "u1"}, False),
+        ("base/users.delete", {"id": "u2"}, False),
+    ]
+
+
+def test_admin_collections_add_user_skip_existing(monkeypatch, capsys):
+    import io
+    from urllib.error import HTTPError
+
+    def fake_http_json(method, url, token, payload, *, handle_error=True):
+        if payload["userId"] == "u2_id":
+            fp = io.BytesIO(b'{"error":"already_member"}')
+            raise HTTPError(url, 400, "Bad Request", None, fp)
+        return {}
+
+    monkeypatch.setattr(admin, "http_json", fake_http_json)
+    monkeypatch.setattr(admin, "_resolve_user_id", lambda base, token, ident: f"{ident}_id")
+    monkeypatch.setattr(admin, "get_base_and_token", lambda: ("base", "token"))
+
+    args = SimpleNamespace(collection="c", user="u1")
+    admin.cmd_admin_collections_add_user(args)
+    args = SimpleNamespace(collection="c", user="u2")
+    admin.cmd_admin_collections_add_user(args)
+    out, _ = capsys.readouterr()
+    assert "added u1 to c" in out
+    assert "skipped u2: already_member" in out
+
+
+def test_admin_collections_remove_user(monkeypatch):
+    calls = []
+
+    def fake_http_json(method, url, token, payload, *, handle_error=True):
+        calls.append((url, payload, handle_error))
+        return {}
+
+    monkeypatch.setattr(admin, "http_json", fake_http_json)
+    monkeypatch.setattr(admin, "_resolve_user_id", lambda base, token, ident: f"{ident}_id")
+    monkeypatch.setattr(admin, "get_base_and_token", lambda: ("base", "token"))
+
+    args = SimpleNamespace(collection="c", user="u1")
+    admin.cmd_admin_collections_remove_user(args)
+
+    assert calls == [
+        ("base/collections.remove_user", {"id": "c", "userId": "u1_id"}, False)
+    ]
+
+
+def test_admin_collections_add_group_skip_existing(monkeypatch, capsys):
+    import io
+    from urllib.error import HTTPError
+
+    def fake_http_json(method, url, token, payload, *, handle_error=True):
+        if payload["groupId"] == "g2_id":
+            fp = io.BytesIO(b'{"error":"already_member"}')
+            raise HTTPError(url, 400, "Bad Request", None, fp)
+        return {}
+
+    monkeypatch.setattr(admin, "http_json", fake_http_json)
+    monkeypatch.setattr(admin, "_resolve_group_id", lambda base, token, ident: f"{ident}_id")
+    monkeypatch.setattr(admin, "get_base_and_token", lambda: ("base", "token"))
+
+    args = SimpleNamespace(collection="c", group="g1")
+    admin.cmd_admin_collections_add_group(args)
+    args = SimpleNamespace(collection="c", group="g2")
+    admin.cmd_admin_collections_add_group(args)
+    out, _ = capsys.readouterr()
+    assert "added group g1 to c" in out
+    assert "skipped group g2: already_member" in out
+
+
+def test_admin_collections_remove_group(monkeypatch):
+    calls = []
+
+    def fake_http_json(method, url, token, payload, *, handle_error=True):
+        calls.append((url, payload, handle_error))
+        return {}
+
+    monkeypatch.setattr(admin, "http_json", fake_http_json)
+    monkeypatch.setattr(admin, "_resolve_group_id", lambda base, token, ident: f"{ident}_id")
+    monkeypatch.setattr(admin, "get_base_and_token", lambda: ("base", "token"))
+
+    args = SimpleNamespace(collection="c", group="g1")
+    admin.cmd_admin_collections_remove_group(args)
+
+    assert calls == [
+        ("base/collections.remove_group", {"id": "c", "groupId": "g1_id"}, False)
+    ]
+
+
+def test_admin_collections_memberships_paginates(monkeypatch, capsys):
+    offsets = []
+
+    def fake_http_json(method, url, token, payload):
+        offsets.append(payload["offset"])
+        if payload["offset"] == 0:
+            return {"data": {"users": [{"id": "1", "email": "u1@example.com", "name": "U1"}]}}
+        elif payload["offset"] == 1:
+            return {"data": {"users": []}}
+        else:
+            return {"data": {"users": []}}
+
+    monkeypatch.setattr(admin, "http_json", fake_http_json)
+    monkeypatch.setattr(admin, "get_base_and_token", lambda: ("base", "token"))
+    monkeypatch.setattr(admin, "API_MAX_LIMIT", 1)
+
+    args = SimpleNamespace(collection="c", query=None, permission=None)
+    admin.cmd_admin_collections_memberships(args)
+    out, _ = capsys.readouterr()
+    assert "u1@example.com" in out
+    assert offsets[:2] == [0, 1]
+
+
+def test_admin_collections_group_memberships_paginates(monkeypatch, capsys):
+    offsets = []
+
+    def fake_http_json(method, url, token, payload):
+        offsets.append(payload["offset"])
+        if payload["offset"] == 0:
+            return {"data": {"groups": [{"id": "1", "name": "G1", "memberCount": 1}]}}
+        elif payload["offset"] == 1:
+            return {"data": {"groups": []}}
+        else:
+            return {"data": {"groups": []}}
+
+    monkeypatch.setattr(admin, "http_json", fake_http_json)
+    monkeypatch.setattr(admin, "get_base_and_token", lambda: ("base", "token"))
+    monkeypatch.setattr(admin, "API_MAX_LIMIT", 1)
+
+    args = SimpleNamespace(collection="c", query=None, permission=None)
+    admin.cmd_admin_collections_group_memberships(args)
+    out, _ = capsys.readouterr()
+    assert "G1" in out
+    assert offsets[:2] == [0, 1]
