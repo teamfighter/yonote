@@ -116,8 +116,8 @@ def test_admin_users_add(monkeypatch, capsys):
 def test_admin_users_update_promote(monkeypatch):
     calls = []
 
-    def fake_http_json(method, url, token, payload):
-        calls.append((url, payload))
+    def fake_http_json(method, url, token, payload, *, handle_error=True):
+        calls.append((url, payload, handle_error))
         return {"data": {}}
 
     monkeypatch.setattr(admin, "http_json", fake_http_json)
@@ -128,9 +128,37 @@ def test_admin_users_update_promote(monkeypatch):
                            promote=True, demote=False, suspend=False, activate=False)
     admin.cmd_admin_users_update(args)
     assert calls == [
-        ("base/users.promote", {"id": "u1_id"}),
-        ("base/users.promote", {"id": "u2_id"}),
+        ("base/users.promote", {"id": "u1_id"}, False),
+        ("base/users.promote", {"id": "u2_id"}, False),
     ]
+
+
+def test_admin_users_update_promote_handles_errors(monkeypatch, capsys):
+    import io
+    from urllib.error import HTTPError
+
+    def fake_http_json(method, url, token, payload, *, handle_error=True):
+        if payload["id"] == "u2_id":
+            raise HTTPError(url, 404, "Not Found", None, io.BytesIO(b'{"error":"not_found"}'))
+        return {}
+
+    monkeypatch.setattr(admin, "http_json", fake_http_json)
+    monkeypatch.setattr(admin, "get_base_and_token", lambda: ("base", "token"))
+    monkeypatch.setattr(admin, "_resolve_user_id", lambda base, token, ident, **_: ident + "_id")
+
+    args = SimpleNamespace(
+        users=["u1", "u2"],
+        name=None,
+        avatar_url=None,
+        promote=True,
+        demote=False,
+        suspend=False,
+        activate=False,
+    )
+    admin.cmd_admin_users_update(args)
+    out, _ = capsys.readouterr()
+    assert "promote u1" in out
+    assert "skipped u2: not_found" in out
 
 
 def test_admin_users_update_name(monkeypatch):
@@ -289,8 +317,8 @@ def test_users_list_query(monkeypatch):
 def test_users_promote(monkeypatch):
     calls = []
 
-    def fake_http_json(method, url, token, payload):
-        calls.append((url, payload))
+    def fake_http_json(method, url, token, payload, *, handle_error=True):
+        calls.append((url, payload, handle_error))
         return {}
 
     monkeypatch.setattr(admin, "http_json", fake_http_json)
@@ -299,9 +327,29 @@ def test_users_promote(monkeypatch):
     args = SimpleNamespace(users=["u1", "u2"])
     users.cmd_users_promote(args)
     assert calls == [
-        ("base/users.promote", {"id": "u1"}),
-        ("base/users.promote", {"id": "u2"}),
+        ("base/users.promote", {"id": "u1"}, False),
+        ("base/users.promote", {"id": "u2"}, False),
     ]
+
+
+def test_users_promote_skip_errors(monkeypatch, capsys):
+    import io
+    from urllib.error import HTTPError
+
+    def fake_http_json(method, url, token, payload, *, handle_error=True):
+        if payload["id"] == "u2":
+            raise HTTPError(url, 400, "Bad", None, io.BytesIO(b'{"error":"already_admin"}'))
+        return {}
+
+    monkeypatch.setattr(admin, "http_json", fake_http_json)
+    monkeypatch.setattr(admin, "_resolve_user_id", lambda base, token, ident, **_: ident)
+    monkeypatch.setattr(admin, "get_base_and_token", lambda: ("base", "token"))
+
+    args = SimpleNamespace(users=["u1", "u2"])
+    users.cmd_users_promote(args)
+    out, _ = capsys.readouterr()
+    assert "promote u1" in out
+    assert "skipped u2: already_admin" in out
 
 
 def test_groups_add_del_user(monkeypatch):

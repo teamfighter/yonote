@@ -61,9 +61,23 @@ def _resolve_group_id(base: str, token: str, ident: str) -> str:
 def _apply_user_action(path: str, idents: Iterable[str]) -> None:
     base, token = get_base_and_token()
     for ident in idents:
-        uid = _resolve_user_id(base, token, ident)
-        http_json("POST", f"{base}/{path}", token, {"id": uid})
-        print(f"{path.split('.')[1]} {ident}")
+        uid = _resolve_user_id(base, token, ident, required=False)
+        if not uid:
+            continue
+        try:
+            http_json(
+                "POST",
+                f"{base}/{path}",
+                token,
+                {"id": uid},
+                handle_error=False,
+            )
+            print(f"{path.split('.')[1]} {ident}")
+        except HTTPError as e:
+            if e.code in (400, 404):
+                print(f"skipped {ident}: {_error_message(e)}")
+            else:
+                _handle_http_error(e)
 
 
 def _error_message(e: HTTPError) -> str:
@@ -141,11 +155,15 @@ def cmd_admin_users_update(args) -> None:
         print("Profile fields can only be updated for a single user", file=sys.stderr)
         sys.exit(1)
 
-    resolved = [
-        (ident, _resolve_user_id(base, token, ident)) for ident in args.users
-    ]
+    resolved: List[Tuple[str, str]] = []
+    for ident in args.users:
+        uid = _resolve_user_id(base, token, ident, required=False)
+        if uid:
+            resolved.append((ident, uid))
 
     if updates:
+        if not resolved:
+            sys.exit(1)
         ident, uid = resolved[0]
         payload = {"id": uid, **updates}
         data = http_json("POST", f"{base}/users.update", token, payload)
@@ -153,8 +171,20 @@ def cmd_admin_users_update(args) -> None:
 
     for path, verb in actions:
         for ident, uid in resolved:
-            http_json("POST", f"{base}/{path}", token, {"id": uid})
-            print(f"{verb} {ident}")
+            try:
+                http_json(
+                    "POST",
+                    f"{base}/{path}",
+                    token,
+                    {"id": uid},
+                    handle_error=False,
+                )
+                print(f"{verb} {ident}")
+            except HTTPError as e:
+                if e.code in (400, 404):
+                    print(f"skipped {ident}: {_error_message(e)}")
+                else:
+                    _handle_http_error(e)
 
 
 def cmd_admin_users_delete(args) -> None:
