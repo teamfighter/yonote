@@ -46,13 +46,7 @@ def _resolve_user_id(base: str, token: str, ident: str) -> str:
 def _resolve_group_id(base: str, token: str, ident: str) -> str:
     if _is_uuid(ident):
         return ident
-    groups = fetch_all_concurrent(
-        base,
-        token,
-        "/groups.list",
-        params={},
-        desc=None,
-    )
+    groups = _fetch_memberships(base, token, "/groups.list", {}, "groups")
     for group in groups:
         if group.get("name") == ident:
             return group["id"]
@@ -170,7 +164,7 @@ def cmd_admin_groups_create(args) -> None:
         print(json.dumps(data.get("data"), ensure_ascii=False, indent=2))
 
 
-def cmd_admin_groups_update(args) -> None:
+def cmd_admin_groups_rename(args) -> None:
     base, token = get_base_and_token()
     gid = _resolve_group_id(base, token, args.group)
     data = http_json(
@@ -184,9 +178,10 @@ def cmd_admin_groups_update(args) -> None:
 
 def cmd_admin_groups_delete(args) -> None:
     base, token = get_base_and_token()
-    gid = _resolve_group_id(base, token, args.group)
-    http_json("POST", f"{base}/groups.delete", token, {"id": gid})
-    print(f"delete {args.group}")
+    for ident in args.groups:
+        gid = _resolve_group_id(base, token, ident)
+        http_json("POST", f"{base}/groups.delete", token, {"id": gid})
+        print(f"delete {ident}")
 
 
 def _fetch_memberships(base: str, token: str, path: str, params: dict, key: str):
@@ -218,17 +213,19 @@ def cmd_admin_groups_memberships(args) -> None:
 def cmd_admin_groups_add_user(args) -> None:
     base, token = get_base_and_token()
     gid = _resolve_group_id(base, token, args.group)
-    uid = _resolve_user_id(base, token, args.user)
-    http_json("POST", f"{base}/groups.add_user", token, {"id": gid, "userId": uid})
-    print(f"added {args.user} to {args.group}")
+    for user in args.users:
+        uid = _resolve_user_id(base, token, user)
+        http_json("POST", f"{base}/groups.add_user", token, {"id": gid, "userId": uid})
+        print(f"added {user} to {args.group}")
 
 
-def cmd_admin_groups_remove_user(args) -> None:
+def cmd_admin_groups_del_user(args) -> None:
     base, token = get_base_and_token()
     gid = _resolve_group_id(base, token, args.group)
-    uid = _resolve_user_id(base, token, args.user)
-    http_json("POST", f"{base}/groups.remove_user", token, {"id": gid, "userId": uid})
-    print(f"removed {args.user} from {args.group}")
+    for user in args.users:
+        uid = _resolve_user_id(base, token, user)
+        http_json("POST", f"{base}/groups.remove_user", token, {"id": gid, "userId": uid})
+        print(f"removed {user} from {args.group}")
 
 
 # --- collection commands --------------------------------------------------

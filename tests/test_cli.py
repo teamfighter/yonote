@@ -211,6 +211,58 @@ def test_admin_groups_create_multiple(monkeypatch):
     ]
 
 
+def test_admin_groups_delete_multiple(monkeypatch):
+    calls = []
+
+    def fake_http_json(method, url, token, payload):
+        calls.append((url, payload))
+        return {}
+
+    monkeypatch.setattr(admin, "http_json", fake_http_json)
+    monkeypatch.setattr(admin, "_resolve_group_id", lambda base, token, ident: f"id-{ident}")
+    monkeypatch.setattr(admin, "get_base_and_token", lambda: ("base", "token"))
+
+    args = SimpleNamespace(groups=["g1", "g2"])
+    admin.cmd_admin_groups_delete(args)
+
+    assert calls == [
+        ("base/groups.delete", {"id": "id-g1"}),
+        ("base/groups.delete", {"id": "id-g2"}),
+    ]
+
+
+def test_admin_groups_rename(monkeypatch, capsys):
+    captured = {}
+
+    def fake_http_json(method, url, token, payload):
+        captured["url"] = url
+        captured["payload"] = payload
+        return {"data": {"id": "gid", "name": "new"}}
+
+    monkeypatch.setattr(admin, "http_json", fake_http_json)
+    monkeypatch.setattr(admin, "_resolve_group_id", lambda base, token, ident: "gid")
+    monkeypatch.setattr(admin, "get_base_and_token", lambda: ("base", "token"))
+
+    args = SimpleNamespace(group="old", name="new")
+    admin.cmd_admin_groups_rename(args)
+    out, _ = capsys.readouterr()
+    assert "\"name\": \"new\"" in out
+    assert captured["payload"] == {"id": "gid", "name": "new"}
+
+
+def test_resolve_group_id(monkeypatch):
+    def fake_http_json(method, url, token, payload):
+        if payload["offset"] == 0:
+            return {"data": {"groups": [{"id": "gid", "name": "foo"}]}}
+        return {"data": {"groups": []}}
+
+    monkeypatch.setattr(admin, "http_json", fake_http_json)
+    monkeypatch.setattr(admin, "API_MAX_LIMIT", 1)
+
+    gid = admin._resolve_group_id("base", "token", "foo")
+    assert gid == "gid"
+
+
 def test_users_help():
     result = subprocess.run([
         "python", "-m", "yonote_cli.yonote_cli", "users", "--help"
@@ -252,7 +304,7 @@ def test_users_promote(monkeypatch):
     ]
 
 
-def test_groups_add_remove_user(monkeypatch):
+def test_groups_add_del_user(monkeypatch):
     calls = []
 
     def fake_http_json(method, url, token, payload):
@@ -264,14 +316,16 @@ def test_groups_add_remove_user(monkeypatch):
     monkeypatch.setattr(admin, "_resolve_user_id", lambda base, token, ident: ident)
     monkeypatch.setattr(admin, "get_base_and_token", lambda: ("base", "token"))
 
-    args_add = SimpleNamespace(group="g", user="u")
+    args_add = SimpleNamespace(group="g", users=["u1", "u2"])
     groups.cmd_groups_add_user(args_add)
-    args_remove = SimpleNamespace(group="g", user="u")
-    groups.cmd_groups_remove_user(args_remove)
+    args_del = SimpleNamespace(group="g", users=["u1", "u2"])
+    groups.cmd_groups_del_user(args_del)
 
     assert calls == [
-        ("base/groups.add_user", {"id": "g", "userId": "u"}),
-        ("base/groups.remove_user", {"id": "g", "userId": "u"}),
+        ("base/groups.add_user", {"id": "g", "userId": "u1"}),
+        ("base/groups.add_user", {"id": "g", "userId": "u2"}),
+        ("base/groups.remove_user", {"id": "g", "userId": "u1"}),
+        ("base/groups.remove_user", {"id": "g", "userId": "u2"}),
     ]
 
 

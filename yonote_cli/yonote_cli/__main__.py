@@ -30,11 +30,11 @@ try:  # pragma: no cover - exercised indirectly in tests
         cmd_users_delete,
         cmd_groups_list,
         cmd_groups_create,
-        cmd_groups_update,
+        cmd_groups_rename,
         cmd_groups_delete,
         cmd_groups_memberships,
         cmd_groups_add_user,
-        cmd_groups_remove_user,
+        cmd_groups_del_user,
         cmd_collections_list,
         cmd_collections_add_user,
         cmd_collections_remove_user,
@@ -49,11 +49,11 @@ try:  # pragma: no cover - exercised indirectly in tests
         cmd_admin_users_delete,
         cmd_admin_groups_list,
         cmd_admin_groups_create,
-        cmd_admin_groups_update,
+        cmd_admin_groups_rename,
         cmd_admin_groups_delete,
         cmd_admin_groups_memberships,
         cmd_admin_groups_add_user,
-        cmd_admin_groups_remove_user,
+        cmd_admin_groups_del_user,
         cmd_admin_collections_list,
         cmd_admin_collections_add_user,
         cmd_admin_collections_remove_user,
@@ -85,11 +85,11 @@ except ModuleNotFoundError:  # pragma: no cover
         cmd_users_delete,
         cmd_groups_list,
         cmd_groups_create,
-        cmd_groups_update,
+        cmd_groups_rename,
         cmd_groups_delete,
         cmd_groups_memberships,
         cmd_groups_add_user,
-        cmd_groups_remove_user,
+        cmd_groups_del_user,
         cmd_collections_list,
         cmd_collections_add_user,
         cmd_collections_remove_user,
@@ -104,11 +104,11 @@ except ModuleNotFoundError:  # pragma: no cover
         cmd_admin_users_delete,
         cmd_admin_groups_list,
         cmd_admin_groups_create,
-        cmd_admin_groups_update,
+        cmd_admin_groups_rename,
         cmd_admin_groups_delete,
         cmd_admin_groups_memberships,
         cmd_admin_groups_add_user,
-        cmd_admin_groups_remove_user,
+        cmd_admin_groups_del_user,
         cmd_admin_collections_list,
         cmd_admin_collections_add_user,
         cmd_admin_collections_remove_user,
@@ -213,13 +213,13 @@ def main(argv=None):
     p_g_create.add_argument("names", nargs="+", help="Group names")
     p_g_create.set_defaults(func=cmd_groups_create)
 
-    p_g_update = sub_groups.add_parser("update", help="Update group")
-    p_g_update.add_argument("group", help="Group id or name")
-    p_g_update.add_argument("name")
-    p_g_update.set_defaults(func=cmd_groups_update)
+    p_g_rename = sub_groups.add_parser("rename", help="Rename group")
+    p_g_rename.add_argument("group", help="Group id or name")
+    p_g_rename.add_argument("name")
+    p_g_rename.set_defaults(func=cmd_groups_rename)
 
-    p_g_delete = sub_groups.add_parser("delete", help="Delete group")
-    p_g_delete.add_argument("group")
+    p_g_delete = sub_groups.add_parser("delete", help="Delete group(s)")
+    p_g_delete.add_argument("groups", nargs="+")
     p_g_delete.set_defaults(func=cmd_groups_delete)
 
     p_g_memberships = sub_groups.add_parser("memberships", help="List group members")
@@ -227,15 +227,15 @@ def main(argv=None):
     p_g_memberships.add_argument("--query")
     p_g_memberships.set_defaults(func=cmd_groups_memberships)
 
-    p_g_add_user = sub_groups.add_parser("add_user", help="Add user to group")
+    p_g_add_user = sub_groups.add_parser("add_user", help="Add user(s) to group")
     p_g_add_user.add_argument("group")
-    p_g_add_user.add_argument("user")
+    p_g_add_user.add_argument("users", nargs="+")
     p_g_add_user.set_defaults(func=cmd_groups_add_user)
 
-    p_g_remove_user = sub_groups.add_parser("remove_user", help="Remove user from group")
-    p_g_remove_user.add_argument("group")
-    p_g_remove_user.add_argument("user")
-    p_g_remove_user.set_defaults(func=cmd_groups_remove_user)
+    p_g_del_user = sub_groups.add_parser("del_user", help="Remove user(s) from group")
+    p_g_del_user.add_argument("group")
+    p_g_del_user.add_argument("users", nargs="+")
+    p_g_del_user.set_defaults(func=cmd_groups_del_user)
 
     # collections
     p_cols = sub.add_parser("collections", help="Manage collection access")
@@ -328,13 +328,13 @@ def main(argv=None):
     p_ag_create.add_argument("names", nargs="+", help="Group names")
     p_ag_create.set_defaults(func=cmd_admin_groups_create)
 
-    p_ag_update = sub_admin_groups.add_parser("update", help="Update group")
-    p_ag_update.add_argument("group", help="Group id or name")
-    p_ag_update.add_argument("name")
-    p_ag_update.set_defaults(func=cmd_admin_groups_update)
+    p_ag_rename = sub_admin_groups.add_parser("rename", help="Rename group")
+    p_ag_rename.add_argument("group", help="Group id or name")
+    p_ag_rename.add_argument("name")
+    p_ag_rename.set_defaults(func=cmd_admin_groups_rename)
 
-    p_ag_delete = sub_admin_groups.add_parser("delete", help="Delete group")
-    p_ag_delete.add_argument("group")
+    p_ag_delete = sub_admin_groups.add_parser("delete", help="Delete group(s)")
+    p_ag_delete.add_argument("groups", nargs="+")
     p_ag_delete.set_defaults(func=cmd_admin_groups_delete)
 
     p_ag_memberships = sub_admin_groups.add_parser("memberships", help="List group members")
@@ -342,15 +342,15 @@ def main(argv=None):
     p_ag_memberships.add_argument("--query")
     p_ag_memberships.set_defaults(func=cmd_admin_groups_memberships)
 
-    p_ag_add_user = sub_admin_groups.add_parser("add_user", help="Add user to group")
+    p_ag_add_user = sub_admin_groups.add_parser("add_user", help="Add user(s) to group")
     p_ag_add_user.add_argument("group")
-    p_ag_add_user.add_argument("user")
+    p_ag_add_user.add_argument("users", nargs="+")
     p_ag_add_user.set_defaults(func=cmd_admin_groups_add_user)
 
-    p_ag_remove_user = sub_admin_groups.add_parser("remove_user", help="Remove user from group")
-    p_ag_remove_user.add_argument("group")
-    p_ag_remove_user.add_argument("user")
-    p_ag_remove_user.set_defaults(func=cmd_admin_groups_remove_user)
+    p_ag_del_user = sub_admin_groups.add_parser("del_user", help="Remove user(s) from group")
+    p_ag_del_user.add_argument("group")
+    p_ag_del_user.add_argument("users", nargs="+")
+    p_ag_del_user.set_defaults(func=cmd_admin_groups_del_user)
 
     # admin collections
     p_admin_collections = sub_admin.add_parser("collections", help="Manage collection access")
