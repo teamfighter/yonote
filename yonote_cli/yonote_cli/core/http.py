@@ -20,8 +20,17 @@ def http_json(
     url: str,
     token: str,
     payload: Dict[str, Any] | None = None,
+    *,
+    handle_error: bool = True,
 ) -> Dict[str, Any] | bytes:
-    """Perform an HTTP request and return parsed JSON or raw bytes."""
+    """Perform an HTTP request and return parsed JSON or raw bytes.
+
+    By default HTTP errors are handled via :func:`_handle_http_error` which
+    prints a message and exits the program.  Some callers may wish to deal with
+    errors on a per-item basis (e.g. when adding multiple group members).  For
+    those cases ``handle_error`` can be set to ``False`` so the original
+    :class:`HTTPError` is raised for the caller to inspect.
+    """
 
     headers = {"Accept": "application/json", "Authorization": f"Bearer {token}"}
     data = None
@@ -42,13 +51,22 @@ def http_json(
                     return raw
             return raw
     except HTTPError as e:
-        _handle_http_error(e)
+        if handle_error:
+            _handle_http_error(e)
+        else:
+            raise
     except URLError as e:
         print(f"Network error: {e.reason}", file=sys.stderr)
         sys.exit(2)
 
 
-def http_multipart_post(url: str, token: str, fields: Dict[str, object]) -> Dict[str, Any] | bytes:
+def http_multipart_post(
+    url: str,
+    token: str,
+    fields: Dict[str, object],
+    *,
+    handle_error: bool = True,
+) -> Dict[str, Any] | bytes:
     """Send a multipart/form-data POST request.
 
     ``fields`` is a mapping where each value is either a simple string/bytes or
@@ -98,7 +116,10 @@ def http_multipart_post(url: str, token: str, fields: Dict[str, object]) -> Dict
                     return raw
             return raw
     except HTTPError as e:
-        _handle_http_error(e)
+        if handle_error:
+            _handle_http_error(e)
+        else:
+            raise
     except URLError as e:
         print(f"Network error: {e.reason}", file=sys.stderr)
         sys.exit(2)

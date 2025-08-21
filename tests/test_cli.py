@@ -307,8 +307,8 @@ def test_users_promote(monkeypatch):
 def test_groups_add_del_user(monkeypatch):
     calls = []
 
-    def fake_http_json(method, url, token, payload):
-        calls.append((url, payload))
+    def fake_http_json(method, url, token, payload, *, handle_error=True):
+        calls.append((url, payload, handle_error))
         return {}
 
     monkeypatch.setattr(admin, "http_json", fake_http_json)
@@ -322,11 +322,33 @@ def test_groups_add_del_user(monkeypatch):
     groups.cmd_groups_del_user(args_del)
 
     assert calls == [
-        ("base/groups.add_user", {"id": "g", "userId": "u1"}),
-        ("base/groups.add_user", {"id": "g", "userId": "u2"}),
-        ("base/groups.remove_user", {"id": "g", "userId": "u1"}),
-        ("base/groups.remove_user", {"id": "g", "userId": "u2"}),
+        ("base/groups.add_user", {"id": "g", "userId": "u1"}, False),
+        ("base/groups.add_user", {"id": "g", "userId": "u2"}, False),
+        ("base/groups.remove_user", {"id": "g", "userId": "u1"}, False),
+        ("base/groups.remove_user", {"id": "g", "userId": "u2"}, False),
     ]
+
+
+def test_admin_groups_add_user_skip_existing(monkeypatch, capsys):
+    import io
+    from urllib.error import HTTPError
+
+    def fake_http_json(method, url, token, payload, *, handle_error=True):
+        if payload["userId"] == "u2":
+            fp = io.BytesIO(b'{"error":"already_member"}')
+            raise HTTPError(url, 400, "Bad Request", None, fp)
+        return {}
+
+    monkeypatch.setattr(admin, "http_json", fake_http_json)
+    monkeypatch.setattr(admin, "_resolve_group_id", lambda base, token, ident: "gid")
+    monkeypatch.setattr(admin, "_resolve_user_id", lambda base, token, ident: ident)
+    monkeypatch.setattr(admin, "get_base_and_token", lambda: ("base", "token"))
+
+    args = SimpleNamespace(group="g", users=["u1", "u2"])
+    admin.cmd_admin_groups_add_user(args)
+    out, _ = capsys.readouterr()
+    assert "added u1 to g" in out
+    assert "skipped u2: already_member" in out
 
 
 def test_groups_memberships_paginates(monkeypatch, capsys):

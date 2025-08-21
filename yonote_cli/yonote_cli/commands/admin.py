@@ -6,6 +6,7 @@ import json
 import re
 import sys
 from typing import Iterable, List, Tuple
+from urllib.error import HTTPError
 
 from ..core import (
     fetch_all_concurrent,
@@ -14,6 +15,7 @@ from ..core import (
     http_json,
 )
 from ..core.config import API_MAX_LIMIT
+from ..core.http import _handle_http_error
 
 
 # --- helpers ---------------------------------------------------------------
@@ -60,6 +62,18 @@ def _apply_user_action(path: str, idents: Iterable[str]) -> None:
         uid = _resolve_user_id(base, token, ident)
         http_json("POST", f"{base}/{path}", token, {"id": uid})
         print(f"{path.split('.')[1]} {ident}")
+
+
+def _error_message(e: HTTPError) -> str:
+    """Extract a human-friendly error message from ``HTTPError``."""
+    body = e.read().decode("utf-8", errors="ignore")
+    try:
+        data = json.loads(body)
+        if isinstance(data, dict) and data.get("error"):
+            return data["error"]
+    except Exception:
+        pass
+    return body or e.reason
 
 
 # --- user commands --------------------------------------------------------
@@ -215,8 +229,20 @@ def cmd_admin_groups_add_user(args) -> None:
     gid = _resolve_group_id(base, token, args.group)
     for user in args.users:
         uid = _resolve_user_id(base, token, user)
-        http_json("POST", f"{base}/groups.add_user", token, {"id": gid, "userId": uid})
-        print(f"added {user} to {args.group}")
+        try:
+            http_json(
+                "POST",
+                f"{base}/groups.add_user",
+                token,
+                {"id": gid, "userId": uid},
+                handle_error=False,
+            )
+            print(f"added {user} to {args.group}")
+        except HTTPError as e:
+            if e.code == 400:
+                print(f"skipped {user}: {_error_message(e)}")
+            else:
+                _handle_http_error(e)
 
 
 def cmd_admin_groups_del_user(args) -> None:
@@ -224,8 +250,20 @@ def cmd_admin_groups_del_user(args) -> None:
     gid = _resolve_group_id(base, token, args.group)
     for user in args.users:
         uid = _resolve_user_id(base, token, user)
-        http_json("POST", f"{base}/groups.remove_user", token, {"id": gid, "userId": uid})
-        print(f"removed {user} from {args.group}")
+        try:
+            http_json(
+                "POST",
+                f"{base}/groups.remove_user",
+                token,
+                {"id": gid, "userId": uid},
+                handle_error=False,
+            )
+            print(f"removed {user} from {args.group}")
+        except HTTPError as e:
+            if e.code == 400:
+                print(f"skipped {user}: {_error_message(e)}")
+            else:
+                _handle_http_error(e)
 
 
 # --- collection commands --------------------------------------------------
@@ -249,25 +287,39 @@ def cmd_admin_collections_list(args) -> None:
 def cmd_admin_collections_add_user(args) -> None:
     base, token = get_base_and_token()
     uid = _resolve_user_id(base, token, args.user)
-    http_json(
-        "POST",
-        f"{base}/collections.add_user",
-        token,
-        {"id": args.collection, "userId": uid},
-    )
-    print(f"added {args.user} to {args.collection}")
+    try:
+        http_json(
+            "POST",
+            f"{base}/collections.add_user",
+            token,
+            {"id": args.collection, "userId": uid},
+            handle_error=False,
+        )
+        print(f"added {args.user} to {args.collection}")
+    except HTTPError as e:
+        if e.code == 400:
+            print(f"skipped {args.user}: {_error_message(e)}")
+        else:
+            _handle_http_error(e)
 
 
 def cmd_admin_collections_remove_user(args) -> None:
     base, token = get_base_and_token()
     uid = _resolve_user_id(base, token, args.user)
-    http_json(
-        "POST",
-        f"{base}/collections.remove_user",
-        token,
-        {"id": args.collection, "userId": uid},
-    )
-    print(f"removed {args.user} from {args.collection}")
+    try:
+        http_json(
+            "POST",
+            f"{base}/collections.remove_user",
+            token,
+            {"id": args.collection, "userId": uid},
+            handle_error=False,
+        )
+        print(f"removed {args.user} from {args.collection}")
+    except HTTPError as e:
+        if e.code == 400:
+            print(f"skipped {args.user}: {_error_message(e)}")
+        else:
+            _handle_http_error(e)
 
 
 def cmd_admin_collections_memberships(args) -> None:
@@ -290,25 +342,39 @@ def cmd_admin_collections_memberships(args) -> None:
 def cmd_admin_collections_add_group(args) -> None:
     base, token = get_base_and_token()
     gid = _resolve_group_id(base, token, args.group)
-    http_json(
-        "POST",
-        f"{base}/collections.add_group",
-        token,
-        {"id": args.collection, "groupId": gid},
-    )
-    print(f"added group {args.group} to {args.collection}")
+    try:
+        http_json(
+            "POST",
+            f"{base}/collections.add_group",
+            token,
+            {"id": args.collection, "groupId": gid},
+            handle_error=False,
+        )
+        print(f"added group {args.group} to {args.collection}")
+    except HTTPError as e:
+        if e.code == 400:
+            print(f"skipped group {args.group}: {_error_message(e)}")
+        else:
+            _handle_http_error(e)
 
 
 def cmd_admin_collections_remove_group(args) -> None:
     base, token = get_base_and_token()
     gid = _resolve_group_id(base, token, args.group)
-    http_json(
-        "POST",
-        f"{base}/collections.remove_group",
-        token,
-        {"id": args.collection, "groupId": gid},
-    )
-    print(f"removed group {args.group} from {args.collection}")
+    try:
+        http_json(
+            "POST",
+            f"{base}/collections.remove_group",
+            token,
+            {"id": args.collection, "groupId": gid},
+            handle_error=False,
+        )
+        print(f"removed group {args.group} from {args.collection}")
+    except HTTPError as e:
+        if e.code == 400:
+            print(f"skipped group {args.group}: {_error_message(e)}")
+        else:
+            _handle_http_error(e)
 
 
 def cmd_admin_collections_group_memberships(args) -> None:
