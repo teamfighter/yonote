@@ -122,7 +122,7 @@ def test_admin_users_update_promote(monkeypatch):
 
     monkeypatch.setattr(admin, "http_json", fake_http_json)
     monkeypatch.setattr(admin, "get_base_and_token", lambda: ("base", "token"))
-    monkeypatch.setattr(admin, "_resolve_user_id", lambda base, token, ident: ident + "_id")
+    monkeypatch.setattr(admin, "_resolve_user_id", lambda base, token, ident, **_: ident + "_id")
 
     args = SimpleNamespace(users=["u1", "u2"], name=None, avatar_url=None,
                            promote=True, demote=False, suspend=False, activate=False)
@@ -143,7 +143,7 @@ def test_admin_users_update_name(monkeypatch):
 
     monkeypatch.setattr(admin, "http_json", fake_http_json)
     monkeypatch.setattr(admin, "get_base_and_token", lambda: ("base", "token"))
-    monkeypatch.setattr(admin, "_resolve_user_id", lambda base, token, ident: "uid")
+    monkeypatch.setattr(admin, "_resolve_user_id", lambda base, token, ident, **_: "uid")
 
     args = SimpleNamespace(users=["u"], name="New", avatar_url=None,
                            promote=False, demote=False, suspend=False, activate=False)
@@ -295,7 +295,7 @@ def test_users_promote(monkeypatch):
 
     monkeypatch.setattr(admin, "http_json", fake_http_json)
     monkeypatch.setattr(admin, "get_base_and_token", lambda: ("base", "token"))
-    monkeypatch.setattr(admin, "_resolve_user_id", lambda base, token, ident: ident)
+    monkeypatch.setattr(admin, "_resolve_user_id", lambda base, token, ident, **_: ident)
     args = SimpleNamespace(users=["u1", "u2"])
     users.cmd_users_promote(args)
     assert calls == [
@@ -313,7 +313,7 @@ def test_groups_add_del_user(monkeypatch):
 
     monkeypatch.setattr(admin, "http_json", fake_http_json)
     monkeypatch.setattr(admin, "_resolve_group_id", lambda base, token, ident: ident)
-    monkeypatch.setattr(admin, "_resolve_user_id", lambda base, token, ident: ident)
+    monkeypatch.setattr(admin, "_resolve_user_id", lambda base, token, ident, **_: ident)
     monkeypatch.setattr(admin, "get_base_and_token", lambda: ("base", "token"))
 
     args_add = SimpleNamespace(group="g", users=["u1", "u2"])
@@ -341,7 +341,7 @@ def test_admin_groups_add_user_skip_existing(monkeypatch, capsys):
 
     monkeypatch.setattr(admin, "http_json", fake_http_json)
     monkeypatch.setattr(admin, "_resolve_group_id", lambda base, token, ident: "gid")
-    monkeypatch.setattr(admin, "_resolve_user_id", lambda base, token, ident: ident)
+    monkeypatch.setattr(admin, "_resolve_user_id", lambda base, token, ident, **_: ident)
     monkeypatch.setattr(admin, "get_base_and_token", lambda: ("base", "token"))
 
     args = SimpleNamespace(group="g", users=["u1", "u2"])
@@ -349,6 +349,34 @@ def test_admin_groups_add_user_skip_existing(monkeypatch, capsys):
     out, _ = capsys.readouterr()
     assert "added u1 to g" in out
     assert "skipped u2: already_member" in out
+
+
+def test_admin_groups_del_user_handles_missing(monkeypatch, capsys):
+    import io
+    from urllib.error import HTTPError
+
+    def fake_http_json(method, url, token, payload, *, handle_error=True):
+        if payload["userId"] == "u1":
+            fp = io.BytesIO(b'{"error":"not_found"}')
+            raise HTTPError(url, 404, "Not Found", None, fp)
+        return {}
+
+    def fake_resolve_user_id(base, token, ident, *, required=True):
+        if ident == "u2":
+            print(f"User not found: {ident}", file=sys.stderr)
+            return None
+        return ident
+
+    monkeypatch.setattr(admin, "http_json", fake_http_json)
+    monkeypatch.setattr(admin, "_resolve_group_id", lambda base, token, ident: "gid")
+    monkeypatch.setattr(admin, "_resolve_user_id", fake_resolve_user_id)
+    monkeypatch.setattr(admin, "get_base_and_token", lambda: ("base", "token"))
+
+    args = SimpleNamespace(group="g", users=["u1", "u2"])
+    admin.cmd_admin_groups_del_user(args)
+    out, err = capsys.readouterr()
+    assert "skipped u1: not_found" in out
+    assert "User not found: u2" in err
 
 
 def test_groups_memberships_paginates(monkeypatch, capsys):

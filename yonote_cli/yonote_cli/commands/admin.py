@@ -29,7 +29,7 @@ def _is_uuid(value: str) -> bool:
     return bool(_UUID_RE.fullmatch(value))
 
 
-def _resolve_user_id(base: str, token: str, ident: str) -> str:
+def _resolve_user_id(base: str, token: str, ident: str, *, required: bool = True) -> str | None:
     if _is_uuid(ident):
         return ident
     data = http_json(
@@ -42,7 +42,9 @@ def _resolve_user_id(base: str, token: str, ident: str) -> str:
         if user.get("email", "").lower() == ident.lower():
             return user["id"]
     print(f"User not found: {ident}", file=sys.stderr)
-    sys.exit(1)
+    if required:
+        sys.exit(1)
+    return None
 
 
 def _resolve_group_id(base: str, token: str, ident: str) -> str:
@@ -228,7 +230,9 @@ def cmd_admin_groups_add_user(args) -> None:
     base, token = get_base_and_token()
     gid = _resolve_group_id(base, token, args.group)
     for user in args.users:
-        uid = _resolve_user_id(base, token, user)
+        uid = _resolve_user_id(base, token, user, required=False)
+        if not uid:
+            continue
         try:
             http_json(
                 "POST",
@@ -239,7 +243,7 @@ def cmd_admin_groups_add_user(args) -> None:
             )
             print(f"added {user} to {args.group}")
         except HTTPError as e:
-            if e.code == 400:
+            if e.code in (400, 404):
                 print(f"skipped {user}: {_error_message(e)}")
             else:
                 _handle_http_error(e)
@@ -249,7 +253,9 @@ def cmd_admin_groups_del_user(args) -> None:
     base, token = get_base_and_token()
     gid = _resolve_group_id(base, token, args.group)
     for user in args.users:
-        uid = _resolve_user_id(base, token, user)
+        uid = _resolve_user_id(base, token, user, required=False)
+        if not uid:
+            continue
         try:
             http_json(
                 "POST",
@@ -260,7 +266,7 @@ def cmd_admin_groups_del_user(args) -> None:
             )
             print(f"removed {user} from {args.group}")
         except HTTPError as e:
-            if e.code == 400:
+            if e.code in (400, 404):
                 print(f"skipped {user}: {_error_message(e)}")
             else:
                 _handle_http_error(e)
