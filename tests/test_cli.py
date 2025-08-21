@@ -193,6 +193,24 @@ def test_admin_groups_list(monkeypatch, capsys):
     assert captured["params"] == {"query": "qq"}
 
 
+def test_admin_groups_create_multiple(monkeypatch):
+    calls = []
+
+    def fake_http_json(method, url, token, payload):
+        calls.append((url, payload))
+        return {"data": {"name": payload["name"]}}
+
+    monkeypatch.setattr(admin, "http_json", fake_http_json)
+    monkeypatch.setattr(admin, "get_base_and_token", lambda: ("base", "token"))
+
+    args = SimpleNamespace(names=["g1", "g2"])
+    admin.cmd_admin_groups_create(args)
+    assert calls == [
+        ("base/groups.create", {"name": "g1"}),
+        ("base/groups.create", {"name": "g2"}),
+    ]
+
+
 def test_users_help():
     result = subprocess.run([
         "python", "-m", "yonote_cli.yonote_cli", "users", "--help"

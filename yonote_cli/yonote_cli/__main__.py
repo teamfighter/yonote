@@ -209,8 +209,8 @@ def main(argv=None):
     p_g_list.add_argument("--query")
     p_g_list.set_defaults(func=cmd_groups_list)
 
-    p_g_create = sub_groups.add_parser("create", help="Create group")
-    p_g_create.add_argument("name")
+    p_g_create = sub_groups.add_parser("create", help="Create group(s)")
+    p_g_create.add_argument("names", nargs="+", help="Group names")
     p_g_create.set_defaults(func=cmd_groups_create)
 
     p_g_update = sub_groups.add_parser("update", help="Update group")
@@ -324,8 +324,8 @@ def main(argv=None):
     p_ag_list.add_argument("--query")
     p_ag_list.set_defaults(func=cmd_admin_groups_list)
 
-    p_ag_create = sub_admin_groups.add_parser("create", help="Create group")
-    p_ag_create.add_argument("name")
+    p_ag_create = sub_admin_groups.add_parser("create", help="Create group(s)")
+    p_ag_create.add_argument("names", nargs="+", help="Group names")
     p_ag_create.set_defaults(func=cmd_admin_groups_create)
 
     p_ag_update = sub_admin_groups.add_parser("update", help="Update group")

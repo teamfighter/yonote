@@ -165,8 +165,9 @@ def cmd_admin_groups_list(args) -> None:
 
 def cmd_admin_groups_create(args) -> None:
     base, token = get_base_and_token()
-    data = http_json("POST", f"{base}/groups.create", token, {"name": args.name})
-    print(json.dumps(data.get("data"), ensure_ascii=False, indent=2))
+    for name in args.names:
+        data = http_json("POST", f"{base}/groups.create", token, {"name": name})
+        print(json.dumps(data.get("data"), ensure_ascii=False, indent=2))
 
 
 def cmd_admin_groups_update(args) -> None:
