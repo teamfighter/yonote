@@ -103,21 +103,14 @@ def cmd_admin_users_info(args) -> None:
 def cmd_admin_users_add(args) -> None:
     """Invite one or more users by email.
 
-    The server expects invites in the form ``{"invites": [{"email": ..., "name": ..., "role": ...}]}``.
-    Only email addresses are provided via the CLI, so for each address we
-    derive a placeholder ``name`` from the local part and default ``role`` to
-    ``member``.  Requests are sent individually so that failures for one
-    address do not prevent processing the rest.
+    The API accepts a list of email addresses in the ``emails`` field.  We
+    send one request per address so that a failure for a single invite does not
+    prevent processing the remaining addresses.
     """
     base, token = get_base_and_token()
     for email in args.emails:
-        invite = {
-            "email": email,
-            "name": email.split("@")[0],
-            "role": "member",
-        }
         try:
-            http_json("POST", f"{base}/users.invite", token, {"invites": [invite]})
+            http_json("POST", f"{base}/users.invite", token, {"emails": [email]})
             print(f"invited {email}")
         except SystemExit:
             # http_json already printed the error message
@@ -156,9 +149,7 @@ def cmd_admin_users_update(args) -> None:
 
     if updates:
         ident, uid = resolved[0]
-        auth = http_json("POST", f"{base}/auth.info", token, {})
-        current_id = auth.get("data", {}).get("user", {}).get("id")
-        payload = {"id": current_id, "userId": uid, **updates}
+        payload = {"id": uid, **updates}
         data = http_json("POST", f"{base}/users.update", token, payload)
         print(json.dumps(data.get("data"), ensure_ascii=False, indent=2))
 

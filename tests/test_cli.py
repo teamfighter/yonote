@@ -102,30 +102,8 @@ def test_admin_users_add(monkeypatch, capsys):
     out, _ = capsys.readouterr()
     assert "invited a@example.com" in out
     assert calls == [
-        (
-            "base/users.invite",
-            {
-                "invites": [
-                    {
-                        "email": "a@example.com",
-                        "name": "a",
-                        "role": "member",
-                    }
-                ]
-            },
-        ),
-        (
-            "base/users.invite",
-            {
-                "invites": [
-                    {
-                        "email": "b@example.com",
-                        "name": "b",
-                        "role": "member",
-                    }
-                ]
-            },
-        ),
+        ("base/users.invite", {"emails": ["a@example.com"]}),
+        ("base/users.invite", {"emails": ["b@example.com"]}),
     ]
 
 
@@ -134,7 +112,7 @@ def test_admin_users_add_continues_on_error(monkeypatch, capsys):
 
     def fake_http_json(method, url, token, payload):
         calls.append((url, payload))
-        if payload["invites"][0]["email"] == "b@example.com":
+        if payload["emails"][0] == "b@example.com":
             raise SystemExit(2)
         return {}
 
@@ -148,42 +126,9 @@ def test_admin_users_add_continues_on_error(monkeypatch, capsys):
     assert "invited c@example.com" in out
     assert "failed b@example.com" in err
     assert calls == [
-        (
-            "base/users.invite",
-            {
-                "invites": [
-                    {
-                        "email": "a@example.com",
-                        "name": "a",
-                        "role": "member",
-                    }
-                ]
-            },
-        ),
-        (
-            "base/users.invite",
-            {
-                "invites": [
-                    {
-                        "email": "b@example.com",
-                        "name": "b",
-                        "role": "member",
-                    }
-                ]
-            },
-        ),
-        (
-            "base/users.invite",
-            {
-                "invites": [
-                    {
-                        "email": "c@example.com",
-                        "name": "c",
-                        "role": "member",
-                    }
-                ]
-            },
-        ),
+        ("base/users.invite", {"emails": ["a@example.com"]}),
+        ("base/users.invite", {"emails": ["b@example.com"]}),
+        ("base/users.invite", {"emails": ["c@example.com"]}),
     ]
 
 
@@ -237,8 +182,6 @@ def test_admin_users_update_name(monkeypatch):
 
     def fake_http_json(method, url, token, payload):
         calls.append((url, payload))
-        if url.endswith("auth.info"):
-            return {"data": {"user": {"id": "me"}}}
         return {"data": {}}
 
     monkeypatch.setattr(admin, "http_json", fake_http_json)
@@ -249,8 +192,7 @@ def test_admin_users_update_name(monkeypatch):
                            promote=False, demote=False, suspend=False, activate=False)
     admin.cmd_admin_users_update(args)
     assert calls == [
-        ("base/auth.info", {}),
-        ("base/users.update", {"id": "me", "userId": "uid", "name": "New"}),
+        ("base/users.update", {"id": "uid", "name": "New"}),
     ]
 
 
@@ -259,8 +201,6 @@ def test_admin_users_update_name_and_promote(monkeypatch):
 
     def fake_http_json(method, url, token, payload):
         calls.append((url, payload))
-        if url.endswith("auth.info"):
-            return {"data": {"user": {"id": "me"}}}
         return {"data": {}}
 
     monkeypatch.setattr(admin, "http_json", fake_http_json)
@@ -271,8 +211,7 @@ def test_admin_users_update_name_and_promote(monkeypatch):
                            promote=True, demote=False, suspend=False, activate=False)
     admin.cmd_admin_users_update(args)
     assert calls == [
-        ("base/auth.info", {}),
-        ("base/users.update", {"id": "me", "userId": "uid", "name": "New"}),
+        ("base/users.update", {"id": "uid", "name": "New"}),
         ("base/users.promote", {"id": "uid"}),
     ]
 
