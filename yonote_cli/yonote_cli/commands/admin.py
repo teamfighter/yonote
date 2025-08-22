@@ -156,7 +156,7 @@ def cmd_admin_users_update(args) -> None:
 
     if updates:
         ident, uid = resolved[0]
-        payload = {"id": uid, **updates}
+        payload = {"id": uid, "userId": uid, **updates}
         data = http_json("POST", f"{base}/users.update", token, payload)
         print(json.dumps(data.get("data"), ensure_ascii=False, indent=2))
 

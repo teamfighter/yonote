@@ -248,7 +248,27 @@ def test_admin_users_update_name(monkeypatch):
                            promote=False, demote=False, suspend=False, activate=False)
     admin.cmd_admin_users_update(args)
     assert captured["url"] == "base/users.update"
-    assert captured["payload"] == {"id": "uid", "name": "New"}
+    assert captured["payload"] == {"id": "uid", "userId": "uid", "name": "New"}
+
+
+def test_admin_users_update_name_and_promote(monkeypatch):
+    calls = []
+
+    def fake_http_json(method, url, token, payload):
+        calls.append((url, payload))
+        return {"data": {}}
+
+    monkeypatch.setattr(admin, "http_json", fake_http_json)
+    monkeypatch.setattr(admin, "get_base_and_token", lambda: ("base", "token"))
+    monkeypatch.setattr(admin, "_resolve_user_id", lambda base, token, ident: "uid")
+
+    args = SimpleNamespace(users=["u"], name="New", avatar_url=None,
+                           promote=True, demote=False, suspend=False, activate=False)
+    admin.cmd_admin_users_update(args)
+    assert calls == [
+        ("base/users.update", {"id": "uid", "userId": "uid", "name": "New"}),
+        ("base/users.promote", {"id": "uid"}),
+    ]
 
 
 def test_admin_groups_memberships_paginates(monkeypatch, capsys):
