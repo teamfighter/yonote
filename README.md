@@ -7,10 +7,10 @@ Command line tool for exporting and importing documents from [Yonote](https://yo
 
 ## Run with Docker
 
-Images are published to the [GitHub Container Registry](https://github.com/teamfighter/yonote/pkgs/container/yonote). To use the CLI pull the image and source the helper script:
+Images are published to the [GitHub Container Registry](https://github.com/teamfighter/yonote/pkgs/container/yonote). The `main` tag is rebuilt on every commit to the default branch, while version tags are produced for releases. Pull an image and source the helper script:
 
 ```bash
-export YONOTE_VERSION=v0.3.3
+export YONOTE_VERSION=main # or use a release tag like v0.3.3
 docker pull ghcr.io/teamfighter/yonote:$YONOTE_VERSION
 curl -O https://raw.githubusercontent.com/teamfighter/yonote/main/yonote.sh
 chmod +x yonote.sh
@@ -86,6 +86,14 @@ yonote cache clear  # delete cache
 ```
 
 The `--refresh-cache` flag or `Ctrl+R` shortcut let you refresh only required branches, reducing request time.
+
+## Admin commands
+
+Administrative helpers allow managing workspace entities via the Yonote API:
+
+- `yonote admin users` – invite, promote or remove users;
+- `yonote admin groups` – create groups and manage memberships;
+- `yonote admin collections list` – list all collections in the workspace.
 
 ## Examples
 
