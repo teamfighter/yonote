@@ -46,13 +46,7 @@ def _resolve_user_id(base: str, token: str, ident: str) -> str:
 def _resolve_group_id(base: str, token: str, ident: str) -> str:
     if _is_uuid(ident):
         return ident
-    groups = fetch_all_concurrent(
-        base,
-        token,
-        "/groups.list",
-        params={},
-        desc=None,
-    )
+    groups = _fetch_memberships(base, token, "/groups.list", {}, "groups")
     for group in groups:
         if group.get("name") == ident:
             return group["id"]
@@ -152,13 +146,7 @@ def cmd_admin_users_delete(args) -> None:
 
 def cmd_admin_groups_list(_args) -> None:
     base, token = get_base_and_token()
-    groups = fetch_all_concurrent(
-        base,
-        token,
-        "/groups.list",
-        params={},
-        desc=None,
-    )
+    groups = _fetch_memberships(base, token, "/groups.list", {}, "groups")
     norm = [g if isinstance(g, dict) else {"name": g} for g in groups]
     format_rows(norm, ["id", "name", "memberCount"])
 

@@ -206,13 +206,25 @@ def test_admin_groups_memberships_paginates(monkeypatch, capsys):
 def test_admin_groups_list_handles_strings(monkeypatch, capsys):
     monkeypatch.setattr(
         admin,
-        "fetch_all_concurrent",
-        lambda base, token, path, params=None, desc=None: ["group1"],
+        "_fetch_memberships",
+        lambda base, token, path, params, key: ["group1"],
     )
     monkeypatch.setattr(admin, "get_base_and_token", lambda: ("base", "token"))
     admin.cmd_admin_groups_list(SimpleNamespace())
     out, _ = capsys.readouterr()
     assert "group1" in out
+
+
+def test_admin_groups_list_parses_nested_response(monkeypatch, capsys):
+    def fake_http_json(method, url, token, payload):
+        return {"data": {"groups": [{"id": "g1", "name": "Group1", "memberCount": 2}], "groupMemberships": []}}
+
+    monkeypatch.setattr(admin, "http_json", fake_http_json)
+    monkeypatch.setattr(admin, "get_base_and_token", lambda: ("base", "token"))
+    monkeypatch.setattr(admin, "API_MAX_LIMIT", 10)
+    admin.cmd_admin_groups_list(SimpleNamespace())
+    out, _ = capsys.readouterr()
+    assert "Group1" in out and "2" in out
 
 
 def test_admin_groups_create_multiple(monkeypatch):
