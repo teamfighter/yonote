@@ -172,9 +172,17 @@ def cmd_admin_groups_update(args) -> None:
 
 def cmd_admin_groups_delete(args) -> None:
     base, token = get_base_and_token()
-    gid = _resolve_group_id(base, token, args.group)
-    http_json("POST", f"{base}/groups.delete", token, {"id": gid})
-    print(f"delete {args.group}")
+    had_error = False
+    for ident in args.groups:
+        try:
+            gid = _resolve_group_id(base, token, ident)
+        except SystemExit:
+            had_error = True
+            continue
+        http_json("POST", f"{base}/groups.delete", token, {"id": gid})
+        print(f"delete {ident}")
+    if had_error:
+        sys.exit(1)
 
 
 def _fetch_memberships(base: str, token: str, path: str, params: dict, key: str):

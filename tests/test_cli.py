@@ -245,6 +245,31 @@ def test_admin_groups_create_multiple(monkeypatch):
     ]
 
 
+def test_admin_groups_delete_reports_all_missing(monkeypatch, capsys):
+    calls = []
+
+    def fake_resolve(base, token, ident):
+        if ident == "good":
+            return "gid1"
+        print(f"Group not found: {ident}", file=sys.stderr)
+        raise SystemExit(1)
+
+    def fake_http_json(method, url, token, payload):
+        calls.append(payload["id"])
+
+    monkeypatch.setattr(admin, "_resolve_group_id", fake_resolve)
+    monkeypatch.setattr(admin, "http_json", fake_http_json)
+    monkeypatch.setattr(admin, "get_base_and_token", lambda: ("base", "token"))
+
+    args = SimpleNamespace(groups=["good", "bad1", "bad2"])
+    with pytest.raises(SystemExit):
+        admin.cmd_admin_groups_delete(args)
+    _, err = capsys.readouterr()
+    assert "Group not found: bad1" in err
+    assert "Group not found: bad2" in err
+    assert calls == ["gid1"]
+
+
 def test_admin_collections_list(monkeypatch, capsys):
     monkeypatch.setattr(
         admin,

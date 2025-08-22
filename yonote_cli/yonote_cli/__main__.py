@@ -162,8 +162,8 @@ def main(argv=None):
     p_ag_update.add_argument("name")
     p_ag_update.set_defaults(func=cmd_admin_groups_update)
 
-    p_ag_delete = sub_admin_groups.add_parser("delete", help="Delete group")
-    p_ag_delete.add_argument("group")
+    p_ag_delete = sub_admin_groups.add_parser("delete", help="Delete group(s)")
+    p_ag_delete.add_argument("groups", nargs="+", help="Group ids or names")
     p_ag_delete.set_defaults(func=cmd_admin_groups_delete)
 
     p_ag_memberships = sub_admin_groups.add_parser("memberships", help="List group members")
