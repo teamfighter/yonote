@@ -120,8 +120,6 @@ def cmd_admin_users_add(args) -> None:
 def cmd_admin_users_update(args) -> None:
     base, token = get_base_and_token()
     updates = {}
-    if args.name:
-        updates["name"] = args.name
     if args.avatar_url:
         updates["avatarUrl"] = args.avatar_url
 

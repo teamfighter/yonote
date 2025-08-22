@@ -31,6 +31,7 @@ def test_admin_users_help():
         "python", "-m", "yonote_cli.yonote_cli", "admin", "users", "update", "--help"
     ], capture_output=True, text=True)
     assert "--promote" in upd_help.stdout
+    assert "--name" not in upd_help.stdout
 
 
 def test_auth_help():
@@ -168,51 +169,12 @@ def test_admin_users_update_promote(monkeypatch):
     monkeypatch.setattr(admin, "get_base_and_token", lambda: ("base", "token"))
     monkeypatch.setattr(admin, "_resolve_user_id", lambda base, token, ident: ident + "_id")
 
-    args = SimpleNamespace(users=["u1", "u2"], name=None, avatar_url=None,
+    args = SimpleNamespace(users=["u1", "u2"], avatar_url=None,
                            promote=True, demote=False, suspend=False, activate=False)
     admin.cmd_admin_users_update(args)
     assert calls == [
         ("base/users.promote", {"id": "u1_id"}),
         ("base/users.promote", {"id": "u2_id"}),
-    ]
-
-
-def test_admin_users_update_name(monkeypatch):
-    calls = []
-
-    def fake_http_json(method, url, token, payload):
-        calls.append((url, payload))
-        return {"data": {}}
-
-    monkeypatch.setattr(admin, "http_json", fake_http_json)
-    monkeypatch.setattr(admin, "get_base_and_token", lambda: ("base", "token"))
-    monkeypatch.setattr(admin, "_resolve_user_id", lambda base, token, ident: "uid")
-
-    args = SimpleNamespace(users=["u"], name="New", avatar_url=None,
-                           promote=False, demote=False, suspend=False, activate=False)
-    admin.cmd_admin_users_update(args)
-    assert calls == [
-        ("base/users.update", {"id": "uid", "name": "New"}),
-    ]
-
-
-def test_admin_users_update_name_and_promote(monkeypatch):
-    calls = []
-
-    def fake_http_json(method, url, token, payload):
-        calls.append((url, payload))
-        return {"data": {}}
-
-    monkeypatch.setattr(admin, "http_json", fake_http_json)
-    monkeypatch.setattr(admin, "get_base_and_token", lambda: ("base", "token"))
-    monkeypatch.setattr(admin, "_resolve_user_id", lambda base, token, ident: "uid")
-
-    args = SimpleNamespace(users=["u"], name="New", avatar_url=None,
-                           promote=True, demote=False, suspend=False, activate=False)
-    admin.cmd_admin_users_update(args)
-    assert calls == [
-        ("base/users.update", {"id": "uid", "name": "New"}),
-        ("base/users.promote", {"id": "uid"}),
     ]
 
 
