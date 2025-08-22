@@ -87,11 +87,10 @@ def test_admin_users_list_query(monkeypatch):
 
 
 def test_admin_users_add(monkeypatch, capsys):
-    captured = {}
+    calls = []
 
     def fake_http_json(method, url, token, payload):
-        captured["url"] = url
-        captured["payload"] = payload
+        calls.append((url, payload))
         return {}
 
     monkeypatch.setattr(admin, "http_json", fake_http_json)
@@ -101,8 +100,10 @@ def test_admin_users_add(monkeypatch, capsys):
     admin.cmd_admin_users_add(args)
     out, _ = capsys.readouterr()
     assert "invited a@example.com" in out
-    assert captured["url"] == "base/users.invite"
-    assert captured["payload"] == {"emails": ["a@example.com", "b@example.com"]}
+    assert calls == [
+        ("base/users.invite", {"email": "a@example.com"}),
+        ("base/users.invite", {"email": "b@example.com"}),
+    ]
 
 
 def test_admin_users_update_promote(monkeypatch):
@@ -166,3 +167,47 @@ def test_admin_groups_memberships_paginates(monkeypatch, capsys):
     out, _ = capsys.readouterr()
     assert "u2@example.com" in out
     assert offsets[:2] == [0, 1]
+
+
+def test_admin_groups_list_handles_strings(monkeypatch, capsys):
+    monkeypatch.setattr(
+        admin,
+        "fetch_all_concurrent",
+        lambda base, token, path, params=None, desc=None: ["group1"],
+    )
+    monkeypatch.setattr(admin, "get_base_and_token", lambda: ("base", "token"))
+    admin.cmd_admin_groups_list(SimpleNamespace())
+    out, _ = capsys.readouterr()
+    assert "group1" in out
+
+
+def test_admin_groups_create_multiple(monkeypatch):
+    calls = []
+
+    def fake_http_json(method, url, token, payload):
+        calls.append((url, payload))
+        return {"data": {"id": "gid"}}
+
+    monkeypatch.setattr(admin, "http_json", fake_http_json)
+    monkeypatch.setattr(admin, "get_base_and_token", lambda: ("base", "token"))
+
+    args = SimpleNamespace(names=["g1", "g2"])
+    admin.cmd_admin_groups_create(args)
+    assert calls == [
+        ("base/groups.create", {"name": "g1"}),
+        ("base/groups.create", {"name": "g2"}),
+    ]
+
+
+def test_admin_collections_list(monkeypatch, capsys):
+    monkeypatch.setattr(
+        admin,
+        "fetch_all_concurrent",
+        lambda base, token, path, params=None, desc=None: [
+            {"id": "c1", "name": "Col1", "private": False}
+        ],
+    )
+    monkeypatch.setattr(admin, "get_base_and_token", lambda: ("base", "token"))
+    admin.cmd_admin_collections_list(SimpleNamespace())
+    out, _ = capsys.readouterr()
+    assert "Col1" in out
