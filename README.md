@@ -10,7 +10,7 @@ Command line tool for exporting and importing documents from [Yonote](https://yo
 Images are published to the [GitHub Container Registry](https://github.com/teamfighter/yonote/pkgs/container/yonote). The `main` tag is rebuilt on every commit to the default branch, while version tags are produced for releases. Pull an image and source the helper script:
 
 ```bash
-export YONOTE_VERSION=main # or use a release tag like v0.3.3
+export YONOTE_VERSION=v0.4.0-beta.1
 docker pull ghcr.io/teamfighter/yonote:$YONOTE_VERSION
 curl -O https://raw.githubusercontent.com/teamfighter/yonote/main/yonote.sh
 chmod +x yonote.sh
