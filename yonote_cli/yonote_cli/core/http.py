@@ -20,17 +20,8 @@ def http_json(
     url: str,
     token: str,
     payload: Dict[str, Any] | None = None,
-    *,
-    handle_error: bool = True,
 ) -> Dict[str, Any] | bytes:
-    """Perform an HTTP request and return parsed JSON or raw bytes.
-
-    By default HTTP errors are handled via :func:`_handle_http_error` which
-    prints a message and exits the program.  Some callers may wish to deal with
-    errors on a per-item basis (e.g. when adding multiple group members).  For
-    those cases ``handle_error`` can be set to ``False`` so the original
-    :class:`HTTPError` is raised for the caller to inspect.
-    """
+    """Perform an HTTP request and return parsed JSON or raw bytes."""
 
     headers = {"Accept": "application/json", "Authorization": f"Bearer {token}"}
     data = None
@@ -51,22 +42,15 @@ def http_json(
                     return raw
             return raw
     except HTTPError as e:
-        if handle_error:
-            _handle_http_error(e)
-        else:
-            raise
+        body = e.read().decode("utf-8", errors="ignore")
+        print(f"[HTTP {e.code}] {body}", file=sys.stderr)
+        sys.exit(2)
     except URLError as e:
         print(f"Network error: {e.reason}", file=sys.stderr)
         sys.exit(2)
 
 
-def http_multipart_post(
-    url: str,
-    token: str,
-    fields: Dict[str, object],
-    *,
-    handle_error: bool = True,
-) -> Dict[str, Any] | bytes:
+def http_multipart_post(url: str, token: str, fields: Dict[str, object]) -> Dict[str, Any] | bytes:
     """Send a multipart/form-data POST request.
 
     ``fields`` is a mapping where each value is either a simple string/bytes or
@@ -116,30 +100,10 @@ def http_multipart_post(
                     return raw
             return raw
     except HTTPError as e:
-        if handle_error:
-            _handle_http_error(e)
-        else:
-            raise
+        body = e.read().decode("utf-8", errors="ignore")
+        print(f"[HTTP {e.code}] {body}", file=sys.stderr)
+        sys.exit(2)
     except URLError as e:
         print(f"Network error: {e.reason}", file=sys.stderr)
         sys.exit(2)
-
-
-def _handle_http_error(e: HTTPError) -> None:
-    body = e.read().decode("utf-8", errors="ignore")
-    message = body
-    try:
-        data = json.loads(body)
-        if isinstance(data, dict) and data.get("error"):
-            message = data["error"]
-    except Exception:
-        pass
-
-    if e.code == 401:
-        print(f"Authentication failed: {message}", file=sys.stderr)
-    elif e.code == 403:
-        print(f"Forbidden: {message} (are you an administrator?)", file=sys.stderr)
-    else:
-        print(f"[HTTP {e.code}] {message}", file=sys.stderr)
-    sys.exit(2)
 
