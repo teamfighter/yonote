@@ -62,10 +62,17 @@ def _resolve_group_id(base: str, token: str, ident: str) -> str:
 
 def _apply_user_action(path: str, idents: Iterable[str]) -> None:
     base, token = get_base_and_token()
+    had_error = False
     for ident in idents:
-        uid = _resolve_user_id(base, token, ident)
+        try:
+            uid = _resolve_user_id(base, token, ident)
+        except SystemExit:
+            had_error = True
+            continue
         http_json("POST", f"{base}/{path}", token, {"id": uid})
         print(f"{path.split('.')[1]} {ident}")
+    if had_error:
+        sys.exit(1)
 
 
 # --- user commands --------------------------------------------------------

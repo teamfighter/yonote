@@ -4,6 +4,7 @@ import json
 from types import SimpleNamespace
 import sys
 from pathlib import Path
+import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "yonote_cli"))
 import yonote_cli.commands.admin as admin
@@ -129,6 +130,31 @@ def test_admin_users_add_continues_on_error(monkeypatch, capsys):
         ("base/users.invite", {"emails": ["b@example.com"]}),
         ("base/users.invite", {"emails": ["c@example.com"]}),
     ]
+
+
+def test_admin_users_delete_reports_all_missing(monkeypatch, capsys):
+    calls = []
+
+    def fake_resolve(base, token, ident):
+        if ident == "good@example.com":
+            return "uid1"
+        print(f"User not found: {ident}", file=sys.stderr)
+        raise SystemExit(1)
+
+    def fake_http_json(method, url, token, payload):
+        calls.append(payload["id"])
+
+    monkeypatch.setattr(admin, "_resolve_user_id", fake_resolve)
+    monkeypatch.setattr(admin, "http_json", fake_http_json)
+    monkeypatch.setattr(admin, "get_base_and_token", lambda: ("base", "token"))
+
+    args = SimpleNamespace(users=["good@example.com", "bad1@example.com", "bad2@example.com"])
+    with pytest.raises(SystemExit):
+        admin.cmd_admin_users_delete(args)
+    _, err = capsys.readouterr()
+    assert "User not found: bad1@example.com" in err
+    assert "User not found: bad2@example.com" in err
+    assert calls == ["uid1"]
 
 
 def test_admin_users_update_promote(monkeypatch):
