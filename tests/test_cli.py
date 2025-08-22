@@ -233,11 +233,12 @@ def test_admin_users_update_promote(monkeypatch):
 
 
 def test_admin_users_update_name(monkeypatch):
-    captured = {}
+    calls = []
 
     def fake_http_json(method, url, token, payload):
-        captured["url"] = url
-        captured["payload"] = payload
+        calls.append((url, payload))
+        if url.endswith("auth.info"):
+            return {"data": {"user": {"id": "me"}}}
         return {"data": {}}
 
     monkeypatch.setattr(admin, "http_json", fake_http_json)
@@ -247,8 +248,10 @@ def test_admin_users_update_name(monkeypatch):
     args = SimpleNamespace(users=["u"], name="New", avatar_url=None,
                            promote=False, demote=False, suspend=False, activate=False)
     admin.cmd_admin_users_update(args)
-    assert captured["url"] == "base/users.update"
-    assert captured["payload"] == {"id": "uid", "userId": "uid", "name": "New"}
+    assert calls == [
+        ("base/auth.info", {}),
+        ("base/users.update", {"id": "me", "userId": "uid", "name": "New"}),
+    ]
 
 
 def test_admin_users_update_name_and_promote(monkeypatch):
@@ -256,6 +259,8 @@ def test_admin_users_update_name_and_promote(monkeypatch):
 
     def fake_http_json(method, url, token, payload):
         calls.append((url, payload))
+        if url.endswith("auth.info"):
+            return {"data": {"user": {"id": "me"}}}
         return {"data": {}}
 
     monkeypatch.setattr(admin, "http_json", fake_http_json)
@@ -266,7 +271,8 @@ def test_admin_users_update_name_and_promote(monkeypatch):
                            promote=True, demote=False, suspend=False, activate=False)
     admin.cmd_admin_users_update(args)
     assert calls == [
-        ("base/users.update", {"id": "uid", "userId": "uid", "name": "New"}),
+        ("base/auth.info", {}),
+        ("base/users.update", {"id": "me", "userId": "uid", "name": "New"}),
         ("base/users.promote", {"id": "uid"}),
     ]
 
