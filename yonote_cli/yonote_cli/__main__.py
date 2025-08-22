@@ -31,6 +31,7 @@ try:  # pragma: no cover - exercised indirectly in tests
         cmd_admin_groups_memberships,
         cmd_admin_groups_add_user,
         cmd_admin_groups_remove_user,
+        cmd_admin_collections_list,
         cmd_admin_collections_add_user,
         cmd_admin_collections_remove_user,
         cmd_admin_collections_memberships,
@@ -62,6 +63,7 @@ except ModuleNotFoundError:  # pragma: no cover
         cmd_admin_groups_memberships,
         cmd_admin_groups_add_user,
         cmd_admin_groups_remove_user,
+        cmd_admin_collections_list,
         cmd_admin_collections_add_user,
         cmd_admin_collections_remove_user,
         cmd_admin_collections_memberships,
@@ -132,8 +134,6 @@ def main(argv=None):
 
     p_admin_users_update = sub_admin_users.add_parser("update", help="Update users")
     p_admin_users_update.add_argument("users", nargs="+", help="User ids or emails")
-    p_admin_users_update.add_argument("--name")
-    p_admin_users_update.add_argument("--avatar-url")
     g_admin = p_admin_users_update.add_mutually_exclusive_group()
     g_admin.add_argument("--promote", action="store_true", help="Promote to admin")
     g_admin.add_argument("--demote", action="store_true", help="Demote from admin")
@@ -153,8 +153,8 @@ def main(argv=None):
     p_ag_list = sub_admin_groups.add_parser("list", help="List groups")
     p_ag_list.set_defaults(func=cmd_admin_groups_list)
 
-    p_ag_create = sub_admin_groups.add_parser("create", help="Create group")
-    p_ag_create.add_argument("name")
+    p_ag_create = sub_admin_groups.add_parser("create", help="Create group(s)")
+    p_ag_create.add_argument("names", nargs="+", help="Group names")
     p_ag_create.set_defaults(func=cmd_admin_groups_create)
 
     p_ag_update = sub_admin_groups.add_parser("update", help="Update group")
@@ -162,8 +162,8 @@ def main(argv=None):
     p_ag_update.add_argument("name")
     p_ag_update.set_defaults(func=cmd_admin_groups_update)
 
-    p_ag_delete = sub_admin_groups.add_parser("delete", help="Delete group")
-    p_ag_delete.add_argument("group")
+    p_ag_delete = sub_admin_groups.add_parser("delete", help="Delete group(s)")
+    p_ag_delete.add_argument("groups", nargs="+", help="Group ids or names")
     p_ag_delete.set_defaults(func=cmd_admin_groups_delete)
 
     p_ag_memberships = sub_admin_groups.add_parser("memberships", help="List group members")
@@ -184,6 +184,9 @@ def main(argv=None):
     # admin collections
     p_admin_collections = sub_admin.add_parser("collections", help="Manage collection access")
     sub_admin_collections = p_admin_collections.add_subparsers(dest="admin_collections_cmd")
+
+    p_ac_list = sub_admin_collections.add_parser("list", help="List collections")
+    p_ac_list.set_defaults(func=cmd_admin_collections_list)
 
     p_ac_add_user = sub_admin_collections.add_parser("add_user", help="Add user to collection")
     p_ac_add_user.add_argument("collection")

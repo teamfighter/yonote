@@ -31,4 +31,13 @@ Interactive export of collections and documents. The command uses the browser fr
 ### `yonote import`
 Imports local Markdown files into Yonote. The command prompts for a collection and optional parent document, mirrors the local folder structure, and creates documents in parallel workers.
 
+### `yonote admin users`
+Invite new accounts, promote existing ones or remove members.
+
+### `yonote admin groups`
+Create groups, list them or adjust their membership.
+
+### `yonote admin collections list`
+List all collections in the workspace.
+
 This layered structure keeps network logic, caching and interactive UI reusable across all commands.

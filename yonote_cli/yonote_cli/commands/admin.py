@@ -46,13 +46,7 @@ def _resolve_user_id(base: str, token: str, ident: str) -> str:
 def _resolve_group_id(base: str, token: str, ident: str) -> str:
     if _is_uuid(ident):
         return ident
-    groups = fetch_all_concurrent(
-        base,
-        token,
-        "/groups.list",
-        params={},
-        desc=None,
-    )
+    groups = _fetch_memberships(base, token, "/groups.list", {}, "groups")
     for group in groups:
         if group.get("name") == ident:
             return group["id"]
@@ -62,10 +56,17 @@ def _resolve_group_id(base: str, token: str, ident: str) -> str:
 
 def _apply_user_action(path: str, idents: Iterable[str]) -> None:
     base, token = get_base_and_token()
+    had_error = False
     for ident in idents:
-        uid = _resolve_user_id(base, token, ident)
+        try:
+            uid = _resolve_user_id(base, token, ident)
+        except SystemExit:
+            had_error = True
+            continue
         http_json("POST", f"{base}/{path}", token, {"id": uid})
         print(f"{path.split('.')[1]} {ident}")
+    if had_error:
+        sys.exit(1)
 
 
 # --- user commands --------------------------------------------------------
@@ -94,22 +95,24 @@ def cmd_admin_users_info(args) -> None:
 
 
 def cmd_admin_users_add(args) -> None:
-    """Invite one or more users by email."""
+    """Invite one or more users by email.
+
+    The API accepts a list of email addresses in the ``emails`` field.  We
+    send one request per address so that a failure for a single invite does not
+    prevent processing the remaining addresses.
+    """
     base, token = get_base_and_token()
-    payload = {"emails": args.emails}
-    http_json("POST", f"{base}/users.invite", token, payload)
     for email in args.emails:
-        print(f"invited {email}")
+        try:
+            http_json("POST", f"{base}/users.invite", token, {"emails": [email]})
+            print(f"invited {email}")
+        except SystemExit:
+            # http_json already printed the error message
+            print(f"failed {email}", file=sys.stderr)
 
 
 def cmd_admin_users_update(args) -> None:
     base, token = get_base_and_token()
-    updates = {}
-    if args.name:
-        updates["name"] = args.name
-    if args.avatar_url:
-        updates["avatarUrl"] = args.avatar_url
-
     actions: List[Tuple[str, str]] = []
     if args.promote:
         actions.append(("users.promote", "promote"))
@@ -120,23 +123,13 @@ def cmd_admin_users_update(args) -> None:
     if args.activate:
         actions.append(("users.activate", "activate"))
 
-    if not updates and not actions:
+    if not actions:
         print("No update parameters provided", file=sys.stderr)
-        sys.exit(1)
-
-    if updates and len(args.users) > 1:
-        print("Profile fields can only be updated for a single user", file=sys.stderr)
         sys.exit(1)
 
     resolved = [
         (ident, _resolve_user_id(base, token, ident)) for ident in args.users
     ]
-
-    if updates:
-        ident, uid = resolved[0]
-        payload = {"id": uid, **updates}
-        data = http_json("POST", f"{base}/users.update", token, payload)
-        print(json.dumps(data.get("data"), ensure_ascii=False, indent=2))
 
     for path, verb in actions:
         for ident, uid in resolved:
@@ -153,20 +146,16 @@ def cmd_admin_users_delete(args) -> None:
 
 def cmd_admin_groups_list(_args) -> None:
     base, token = get_base_and_token()
-    groups = fetch_all_concurrent(
-        base,
-        token,
-        "/groups.list",
-        params={},
-        desc=None,
-    )
-    format_rows(groups, ["id", "name", "memberCount"])
+    groups = _fetch_memberships(base, token, "/groups.list", {}, "groups")
+    norm = [g if isinstance(g, dict) else {"name": g} for g in groups]
+    format_rows(norm, ["id", "name", "memberCount"])
 
 
 def cmd_admin_groups_create(args) -> None:
     base, token = get_base_and_token()
-    data = http_json("POST", f"{base}/groups.create", token, {"name": args.name})
-    print(json.dumps(data.get("data"), ensure_ascii=False, indent=2))
+    for name in args.names:
+        data = http_json("POST", f"{base}/groups.create", token, {"name": name})
+        print(json.dumps(data.get("data"), ensure_ascii=False, indent=2))
 
 
 def cmd_admin_groups_update(args) -> None:
@@ -183,9 +172,17 @@ def cmd_admin_groups_update(args) -> None:
 
 def cmd_admin_groups_delete(args) -> None:
     base, token = get_base_and_token()
-    gid = _resolve_group_id(base, token, args.group)
-    http_json("POST", f"{base}/groups.delete", token, {"id": gid})
-    print(f"delete {args.group}")
+    had_error = False
+    for ident in args.groups:
+        try:
+            gid = _resolve_group_id(base, token, ident)
+        except SystemExit:
+            had_error = True
+            continue
+        http_json("POST", f"{base}/groups.delete", token, {"id": gid})
+        print(f"delete {ident}")
+    if had_error:
+        sys.exit(1)
 
 
 def _fetch_memberships(base: str, token: str, path: str, params: dict, key: str):
@@ -231,6 +228,18 @@ def cmd_admin_groups_remove_user(args) -> None:
 
 
 # --- collection commands --------------------------------------------------
+
+
+def cmd_admin_collections_list(_args) -> None:
+    base, token = get_base_and_token()
+    cols = fetch_all_concurrent(
+        base,
+        token,
+        "/collections.list",
+        params={},
+        desc=None,
+    )
+    format_rows(cols, ["id", "name", "private"])
 
 
 def cmd_admin_collections_add_user(args) -> None:
