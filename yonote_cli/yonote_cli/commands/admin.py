@@ -103,16 +103,17 @@ def cmd_admin_users_info(args) -> None:
 def cmd_admin_users_add(args) -> None:
     """Invite one or more users by email.
 
-    The server API expects the ``emails`` field to contain a list of addresses
-    even when inviting a single user.  We therefore send one request per email
-    to provide per-address error handling while still matching the API
-    contract.  If inviting an email fails, the error message is printed and the
-    remaining addresses are processed.
+    Some Yonote deployments expect a singular ``email`` field while others
+    support the legacy ``emails`` array.  To maximise compatibility the CLI
+    sends an individual request for each address using the singular field,
+    providing per-address error handling.  If inviting an email fails, the
+    server's error message is displayed and processing continues with the
+    remaining addresses.
     """
     base, token = get_base_and_token()
     for email in args.emails:
         try:
-            http_json("POST", f"{base}/users.invite", token, {"emails": [email]})
+            http_json("POST", f"{base}/users.invite", token, {"email": email})
             print(f"invited {email}")
         except SystemExit:
             # http_json already printed the error message
