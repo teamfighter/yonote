@@ -94,11 +94,22 @@ def cmd_admin_users_info(args) -> None:
 
 
 def cmd_admin_users_add(args) -> None:
-    """Invite one or more users by email."""
+    """Invite one or more users by email.
+
+    The server API expects the ``emails`` field to contain a list of addresses
+    even when inviting a single user.  We therefore send one request per email
+    to provide per-address error handling while still matching the API
+    contract.  If inviting an email fails, the error message is printed and the
+    remaining addresses are processed.
+    """
     base, token = get_base_and_token()
     for email in args.emails:
-        http_json("POST", f"{base}/users.invite", token, {"email": email})
-        print(f"invited {email}")
+        try:
+            http_json("POST", f"{base}/users.invite", token, {"emails": [email]})
+            print(f"invited {email}")
+        except SystemExit:
+            # http_json already printed the error message
+            print(f"failed {email}", file=sys.stderr)
 
 
 def cmd_admin_users_update(args) -> None:

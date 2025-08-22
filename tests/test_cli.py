@@ -101,8 +101,33 @@ def test_admin_users_add(monkeypatch, capsys):
     out, _ = capsys.readouterr()
     assert "invited a@example.com" in out
     assert calls == [
-        ("base/users.invite", {"email": "a@example.com"}),
-        ("base/users.invite", {"email": "b@example.com"}),
+        ("base/users.invite", {"emails": ["a@example.com"]}),
+        ("base/users.invite", {"emails": ["b@example.com"]}),
+    ]
+
+
+def test_admin_users_add_continues_on_error(monkeypatch, capsys):
+    calls = []
+
+    def fake_http_json(method, url, token, payload):
+        calls.append((url, payload))
+        if payload["emails"][0] == "b@example.com":
+            raise SystemExit(2)
+        return {}
+
+    monkeypatch.setattr(admin, "http_json", fake_http_json)
+    monkeypatch.setattr(admin, "get_base_and_token", lambda: ("base", "token"))
+
+    args = SimpleNamespace(emails=["a@example.com", "b@example.com", "c@example.com"])
+    admin.cmd_admin_users_add(args)
+    out, err = capsys.readouterr()
+    assert "invited a@example.com" in out
+    assert "invited c@example.com" in out
+    assert "failed b@example.com" in err
+    assert calls == [
+        ("base/users.invite", {"emails": ["a@example.com"]}),
+        ("base/users.invite", {"emails": ["b@example.com"]}),
+        ("base/users.invite", {"emails": ["c@example.com"]}),
     ]
 
 
