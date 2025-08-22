@@ -119,10 +119,6 @@ def cmd_admin_users_add(args) -> None:
 
 def cmd_admin_users_update(args) -> None:
     base, token = get_base_and_token()
-    updates = {}
-    if args.avatar_url:
-        updates["avatarUrl"] = args.avatar_url
-
     actions: List[Tuple[str, str]] = []
     if args.promote:
         actions.append(("users.promote", "promote"))
@@ -133,23 +129,13 @@ def cmd_admin_users_update(args) -> None:
     if args.activate:
         actions.append(("users.activate", "activate"))
 
-    if not updates and not actions:
+    if not actions:
         print("No update parameters provided", file=sys.stderr)
-        sys.exit(1)
-
-    if updates and len(args.users) > 1:
-        print("Profile fields can only be updated for a single user", file=sys.stderr)
         sys.exit(1)
 
     resolved = [
         (ident, _resolve_user_id(base, token, ident)) for ident in args.users
     ]
-
-    if updates:
-        ident, uid = resolved[0]
-        payload = {"id": uid, **updates}
-        data = http_json("POST", f"{base}/users.update", token, payload)
-        print(json.dumps(data.get("data"), ensure_ascii=False, indent=2))
 
     for path, verb in actions:
         for ident, uid in resolved:

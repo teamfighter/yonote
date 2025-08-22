@@ -134,7 +134,6 @@ def main(argv=None):
 
     p_admin_users_update = sub_admin_users.add_parser("update", help="Update users")
     p_admin_users_update.add_argument("users", nargs="+", help="User ids or emails")
-    p_admin_users_update.add_argument("--avatar-url")
     g_admin = p_admin_users_update.add_mutually_exclusive_group()
     g_admin.add_argument("--promote", action="store_true", help="Promote to admin")
     g_admin.add_argument("--demote", action="store_true", help="Demote from admin")

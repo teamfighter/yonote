@@ -32,6 +32,7 @@ def test_admin_users_help():
     ], capture_output=True, text=True)
     assert "--promote" in upd_help.stdout
     assert "--name" not in upd_help.stdout
+    assert "--avatar-url" not in upd_help.stdout
 
 
 def test_auth_help():
@@ -169,7 +170,7 @@ def test_admin_users_update_promote(monkeypatch):
     monkeypatch.setattr(admin, "get_base_and_token", lambda: ("base", "token"))
     monkeypatch.setattr(admin, "_resolve_user_id", lambda base, token, ident: ident + "_id")
 
-    args = SimpleNamespace(users=["u1", "u2"], avatar_url=None,
+    args = SimpleNamespace(users=["u1", "u2"],
                            promote=True, demote=False, suspend=False, activate=False)
     admin.cmd_admin_users_update(args)
     assert calls == [
