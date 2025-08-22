@@ -102,8 +102,30 @@ def test_admin_users_add(monkeypatch, capsys):
     out, _ = capsys.readouterr()
     assert "invited a@example.com" in out
     assert calls == [
-        ("base/users.invite", {"email": "a@example.com"}),
-        ("base/users.invite", {"email": "b@example.com"}),
+        (
+            "base/users.invite",
+            {
+                "invites": [
+                    {
+                        "email": "a@example.com",
+                        "name": "a",
+                        "role": "member",
+                    }
+                ]
+            },
+        ),
+        (
+            "base/users.invite",
+            {
+                "invites": [
+                    {
+                        "email": "b@example.com",
+                        "name": "b",
+                        "role": "member",
+                    }
+                ]
+            },
+        ),
     ]
 
 
@@ -112,7 +134,7 @@ def test_admin_users_add_continues_on_error(monkeypatch, capsys):
 
     def fake_http_json(method, url, token, payload):
         calls.append((url, payload))
-        if payload["email"] == "b@example.com":
+        if payload["invites"][0]["email"] == "b@example.com":
             raise SystemExit(2)
         return {}
 
@@ -126,9 +148,42 @@ def test_admin_users_add_continues_on_error(monkeypatch, capsys):
     assert "invited c@example.com" in out
     assert "failed b@example.com" in err
     assert calls == [
-        ("base/users.invite", {"email": "a@example.com"}),
-        ("base/users.invite", {"email": "b@example.com"}),
-        ("base/users.invite", {"email": "c@example.com"}),
+        (
+            "base/users.invite",
+            {
+                "invites": [
+                    {
+                        "email": "a@example.com",
+                        "name": "a",
+                        "role": "member",
+                    }
+                ]
+            },
+        ),
+        (
+            "base/users.invite",
+            {
+                "invites": [
+                    {
+                        "email": "b@example.com",
+                        "name": "b",
+                        "role": "member",
+                    }
+                ]
+            },
+        ),
+        (
+            "base/users.invite",
+            {
+                "invites": [
+                    {
+                        "email": "c@example.com",
+                        "name": "c",
+                        "role": "member",
+                    }
+                ]
+            },
+        ),
     ]
 
 
